@@ -27,11 +27,12 @@ type Config struct {
 }
 
 type Response struct {
-	Branch  string      `json:"branch,omitempty"`
-	Error   string      `json:"error,omitempty"`
-	Log     []string    `json:"log,omitempty"`
-	Commit  string      `json:"commit,omitempty"`
-	Branches []string   `json:"branches,omitempty"`
+	Branch   string      `json:"branch,omitempty"`
+	RepoName string      `json:"repoName,omitempty"`
+	Error    string      `json:"error,omitempty"`
+	Log      []string    `json:"log,omitempty"`
+	Commit   string      `json:"commit,omitempty"`
+	Branches []string    `json:"branches,omitempty"`
 }
 
 type Repository struct {
@@ -240,8 +241,12 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	branch = strings.TrimSpace(branch)
 
+	// Get repository name from the directory name
+	repoName := filepath.Base(config.RepoPath)
+
 	json.NewEncoder(w).Encode(Response{
-		Branch: branch,
+		Branch:   branch,
+		RepoName: repoName,
 	})
 }
 
@@ -821,8 +826,12 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 
 	currentBranch = strings.TrimSpace(currentBranch)
 
+	// Get repository name from the directory name
+	repoName := filepath.Base(config.RepoPath)
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"branch": currentBranch,
+		"branch":   currentBranch,
+		"repoName": repoName,
 	})
 }
 
