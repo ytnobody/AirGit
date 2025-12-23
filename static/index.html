@@ -152,19 +152,27 @@
         }
 
         async function initializeFromUrl() {
+            const pathname = window.location.pathname;
             const params = new URLSearchParams(window.location.search);
-            const path = params.get('path');
-            const branch = params.get('branch');
+            const branch = params.get('b');
 
-            if (!path && !branch) {
+            // Extract relative path from pathname
+            // If pathname is "/" or "/", use current repository, otherwise extract the path
+            let relativePath = null;
+            if (pathname && pathname !== '/') {
+                relativePath = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+            }
+
+            // If no path and no branch parameter, just load status
+            if (!relativePath && !branch) {
                 loadStatus();
                 return;
             }
 
             try {
-                const url = new URL('/api/init', window.location.origin);
-                if (path) url.searchParams.append('path', path);
-                if (branch) url.searchParams.append('branch', branch);
+                const url = new URL('/api/load-repo', window.location.origin);
+                if (relativePath) url.searchParams.append('p', relativePath);
+                if (branch) url.searchParams.append('b', branch);
 
                 const response = await fetch(url.toString());
                 const data = await response.json();
@@ -173,10 +181,10 @@
                     branchName.textContent = data.branch || 'unknown';
                 } else {
                     branchName.textContent = 'Error';
-                    console.error('Init error:', data);
+                    console.error('Load repo error:', data);
                 }
             } catch (error) {
-                console.error('Init failed:', error);
+                console.error('Load repo failed:', error);
                 loadStatus();
             }
         }
@@ -227,7 +235,7 @@
                     
                     // Update URL to reflect the new branch
                     const url = new URL(window.location);
-                    url.searchParams.set('branch', data.branch);
+                    url.searchParams.set('b', data.branch);
                     window.history.pushState({}, '', url);
                 } else {
                     alert(`Error checking out branch: ${data.error || 'Unknown error'}`);
@@ -269,12 +277,12 @@
             `).join('');
         }
 
-        async function selectRepository(name, path) {
+        async function selectRepository(name, relativePath) {
             try {
-                const response = await fetch('/api/select-repo', {
+                const response = await fetch('/api/load-repo', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: path })
+                    body: JSON.stringify({ relativePath: relativePath })
                 });
                 const data = await response.json();
 
@@ -282,11 +290,11 @@
                     branchName.textContent = data.branch || 'unknown';
                     repoModal.classList.add('hidden');
                     
-                    // Update URL to reflect selected repository and branch
-                    const url = new URL(window.location);
-                    url.searchParams.set('path', path);
-                    url.searchParams.set('branch', data.branch);
-                    window.history.pushState({}, '', url);
+                    // Navigate to the repository URL
+                    const url = new URL(window.location.origin);
+                    url.pathname = '/' + relativePath;
+                    url.searchParams.set('b', data.branch);
+                    window.location.href = url.toString();
                 } else {
                     alert(`Error selecting repository: ${data.error || 'Unknown error'}`);
                 }

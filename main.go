@@ -98,17 +98,16 @@ func main() {
 		config.ListenPort = listenPort
 	}
 
-	http.HandleFunc("/", serveStatic)
 	http.HandleFunc("/manifest.json", serveManifest)
 	http.HandleFunc("/service-worker.js", serveServiceWorker)
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/push", handlePush)
 	http.HandleFunc("/api/repos", handleListRepos)
-	http.HandleFunc("/api/select-repo", handleSelectRepo)
+	http.HandleFunc("/api/load-repo", handleLoadRepo)
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
 	http.HandleFunc("/api/branches", handleListBranches)
 	http.HandleFunc("/api/checkout", handleCheckoutBranch)
-	http.HandleFunc("/api/init", handleInit)
+	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
 	log.Printf("Starting AirGit on %s", addr)
@@ -148,6 +147,17 @@ Examples:
 
 For more information, visit: https://github.com/your-repo/AirGit
 `)
+}
+
+func serveRoot(w http.ResponseWriter, r *http.Request) {
+	// Always serve index.html - the frontend will handle routing
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+		return
+	}
+	w.Write(data)
 }
 
 func serveStatic(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +333,7 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req struct {
-		Path string `json:"path"`
+		RelativePath string `json:"relativePath"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -334,15 +344,36 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Path == "" {
+	if req.RelativePath == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{
-			"error": "Path is required",
+			"error": "Relative path is required",
 		})
 		return
 	}
 
-	config.RepoPath = req.Path
+	// Resolve the relative path safely to prevent directory traversal
+	resolvedPath := filepath.Join(config.RepoPath, req.RelativePath)
+	resolvedPath, err := filepath.Abs(resolvedPath)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid path",
+		})
+		return
+	}
+
+	// Check that resolved path is within the base repo path
+	basePath, _ := filepath.Abs(config.RepoPath)
+	if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Path traversal not allowed",
+		})
+		return
+	}
+
+	config.RepoPath = resolvedPath
 
 	// Load status after changing repo
 	branch, err := executeGitCommand("branch", "--show-current")
@@ -467,6 +498,8 @@ func listRepositories(basePath string) ([]Repository, error) {
 		return nil, fmt.Errorf("repository path is not a directory: %s", basePath)
 	}
 
+	absBasePath, _ := filepath.Abs(basePath)
+
 	err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			// Skip directories we can't access instead of failing completely
@@ -482,9 +515,15 @@ func listRepositories(basePath string) ([]Repository, error) {
 			repoPath := filepath.Dir(path)
 			name := filepath.Base(repoPath)
 
+			// Calculate relative path from basePath
+			relPath, err := filepath.Rel(absBasePath, repoPath)
+			if err != nil {
+				relPath = repoPath
+			}
+
 			repos = append(repos, Repository{
 				Name: name,
-				Path: repoPath,
+				Path: relPath,
 			})
 
 			return filepath.SkipDir
@@ -585,15 +624,115 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodPost {
+		// POST: select a repository from the request body
+		var req struct {
+			RelativePath string `json:"relativePath"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid request body",
+			})
+			return
+		}
+
+		if req.RelativePath == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Relative path is required",
+			})
+			return
+		}
+
+		// Resolve the relative path safely to prevent directory traversal
+		resolvedPath := filepath.Join(config.RepoPath, req.RelativePath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid path",
+			})
+			return
+		}
+
+		// Check that resolved path is within the base repo path
+		basePath, _ := filepath.Abs(config.RepoPath)
+		if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Path traversal not allowed",
+			})
+			return
+		}
+
+		config.RepoPath = resolvedPath
+	} else {
+		// GET: load repository and branch from query parameters
+		relativePath := r.URL.Query().Get("p")
+		branch := r.URL.Query().Get("b")
+
+		// If relativePath is provided, update repo path safely
+		if relativePath != "" {
+			// Resolve the relative path safely to prevent directory traversal
+			resolvedPath := filepath.Join(config.RepoPath, relativePath)
+			resolvedPath, err := filepath.Abs(resolvedPath)
+			if err == nil {
+				// Check that resolved path is within the base repo path
+				basePath, _ := filepath.Abs(config.RepoPath)
+				if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+					config.RepoPath = resolvedPath
+				}
+			}
+		}
+
+		// If branch is provided, checkout that branch
+		if branch != "" {
+			_, _ = executeGitCommand("checkout", branch)
+		}
+	}
+
+	// Get current branch
+	currentBranch, err := executeGitCommand("branch", "--show-current")
+	if err != nil || strings.TrimSpace(currentBranch) == "" {
+		currentBranch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to get branch: %v", err),
+			})
+			return
+		}
+	}
+
+	currentBranch = strings.TrimSpace(currentBranch)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"branch": currentBranch,
+	})
+}
+
 func handleInit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	path := r.URL.Query().Get("path")
+	relativePath := r.URL.Query().Get("relativePath")
 	branch := r.URL.Query().Get("branch")
 
-	// If path is provided, update repo path
-	if path != "" {
-		config.RepoPath = path
+	// If relativePath is provided, update repo path safely
+	if relativePath != "" {
+		// Resolve the relative path safely to prevent directory traversal
+		resolvedPath := filepath.Join(config.RepoPath, relativePath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err == nil {
+			// Check that resolved path is within the base repo path
+			basePath, _ := filepath.Abs(config.RepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
 	}
 
 	// Get current branch
@@ -616,7 +755,6 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": fmt.Sprintf("Failed to checkout branch '%s': %v. Output: %s", branch, err, output),
-				"path":  config.RepoPath,
 				"branch": currentBranch,
 			})
 			return
@@ -625,7 +763,6 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"path":   config.RepoPath,
 		"branch": currentBranch,
 	})
 }
