@@ -405,7 +405,6 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    buttonText.classList.add('hidden');
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
                     if (data.log) {
@@ -443,7 +442,6 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    pullButtonText.classList.add('hidden');
                     pullLoadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
                     if (data.log) {
