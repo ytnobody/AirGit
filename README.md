@@ -11,8 +11,11 @@ A lightweight web-based GUI for managing Git repositories directly from your bro
 - 🌐 Remote management (add, update, remove, select)
 - 💾 Repository initialization and creation
 - 📊 Ahead/behind commit tracking
-- 🎨 Dark mode UI optimized for mobile
+- 🎨 UI optimized for mobile with bottom navigation bar
 - 📴 PWA support (offline caching, home screen icon)
+- 📋 Commit history viewing (past 20 commits)
+- 🔧 Systemd service registration and management
+- ⚙️ Settings menu for configuration
 - 🚀 Standalone Go binary
 
 ## Quick Start
@@ -411,25 +414,105 @@ Request Body:
 }
 ```
 
+### GET /api/commits
+Get commit history for the current repository.
+
+Query Parameters:
+- `limit` (optional): Number of commits to return (default: `20`)
+- `repoPath` (optional): Relative path to the repository
+
+Response:
+```json
+{
+  "commits": [
+    {
+      "hash": "abc123def456",
+      "author": "John Doe <john@example.com>",
+      "date": "2024-12-23 10:30:00",
+      "message": "Fix: Update feature"
+    },
+    {
+      "hash": "xyz789uvw123",
+      "author": "Jane Smith <jane@example.com>",
+      "date": "2024-12-22 15:45:00",
+      "message": "Feature: Add new component"
+    }
+  ]
+}
+```
+
+## Systemd Service Management
+
+AirGit includes endpoints for registering and managing the application as a systemd user service.
+
+### POST /api/systemd/register
+Register AirGit as a systemd user service. This creates a service file at `~/.config/systemd/user/airgit.service` and enables it.
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Service registered and enabled"
+}
+```
+
+### GET /api/systemd/status
+Check if AirGit is registered as a systemd service.
+
+Response:
+```json
+{
+  "registered": true,
+  "status": "enabled"
+}
+```
+
+### POST /api/systemd/service-start
+Start the AirGit systemd service.
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Service started"
+}
+```
+
+### GET /api/systemd/service-status
+Get the current status of the AirGit systemd service.
+
+Response:
+```json
+{
+  "active": true,
+  "status": "running"
+}
+```
+
 ## How It Works
 
-1. **Frontend** (HTML5 + Tailwind CSS): Simple, mobile-first UI with intuitive navigation
+1. **Frontend** (HTML5 + Tailwind CSS): Mobile-first UI with bottom navigation bar and intuitive controls
 2. **Backend** (Go):
-   - Exposes comprehensive HTTP REST API
+   - Exposes comprehensive HTTP REST API (25+ endpoints)
    - Executes git commands locally
    - Manages multiple repositories in a base directory
+   - Supports systemd service registration and management
    - Streams logs and results to frontend
    - Handles errors gracefully
+3. **Systemd Integration**: Registers AirGit as a user service for continuous background operation
 
 ## Mobile Usage
 
 1. Open AirGit in your phone's browser
-2. Browse repositories using the **Repos** button
-3. Manage branches using the **Branch** button
-4. Manage remotes using the **Remotes** button
-5. Tap **PUSH** or **PULL** buttons to perform operations
-6. Watch the spinner while operations execute
-7. View operation logs for details
+2. Use the bottom navigation bar to navigate:
+   - **Repos**: Browse and select repositories
+   - **Branch**: Manage branches (list, create, checkout)
+   - **Remotes**: Manage git remotes
+   - **Log**: View commit history (past 20 commits)
+   - **Settings**: Access settings and configuration
+3. Tap **PUSH** or **PULL** buttons in the center to perform operations
+4. Watch the spinner while operations execute
+5. View operation logs for details
 
 ## Add to Home Screen (iOS/Android)
 
@@ -445,16 +528,17 @@ The PWA manifest and service worker enable offline caching and home screen insta
 Mobile Browser
     ↓ HTTP
 AirGit Server (Go)
-    ↓ Local File System
-Local Git Repositories
+    ↓ Local File System & Systemd
+Local Git Repositories & Systemd User Services
 ```
 
 ### Components
 
-- **Frontend UI**: Navigation bar with Branch, Remotes, Repos buttons; operation buttons (Push, Pull)
-- **REST API**: 17 endpoints for repository and git operations
+- **Frontend UI**: Bottom navigation bar with Repos, Branch, Remotes, Log, Settings buttons; central Push/Pull operation buttons
+- **REST API**: 25+ endpoints for repository, git, and systemd operations
 - **Git Executor**: Executes git commands locally on the filesystem
 - **Repository Manager**: Handles multiple repositories within base directory
+- **Systemd Integration**: Registers and manages AirGit as a systemd user service for background operation
 
 ## License
 
