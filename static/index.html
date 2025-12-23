@@ -156,6 +156,38 @@
             }
         }
 
+        async function initializeFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const path = params.get('path');
+            const branch = params.get('branch');
+
+            if (!path && !branch) {
+                loadStatus();
+                return;
+            }
+
+            try {
+                const url = new URL('/api/init', window.location.origin);
+                if (path) url.searchParams.append('path', path);
+                if (branch) url.searchParams.append('branch', branch);
+
+                const response = await fetch(url.toString());
+                const data = await response.json();
+
+                if (response.ok) {
+                    branchName.textContent = data.branch || 'unknown';
+                    serverInfo.textContent = data.server || 'unknown';
+                } else {
+                    branchName.textContent = 'Error';
+                    serverInfo.textContent = data.error || 'Unknown error';
+                    console.error('Init error:', data);
+                }
+            } catch (error) {
+                console.error('Init failed:', error);
+                loadStatus();
+            }
+        }
+
         async function loadBranches() {
             try {
                 const response = await fetch('/api/branches');
@@ -342,7 +374,7 @@
             }
         });
 
-        loadStatus();
+        initializeFromUrl();
         setInterval(loadStatus, 5000);
     </script>
 </body>

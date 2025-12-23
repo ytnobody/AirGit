@@ -109,6 +109,7 @@ func main() {
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
 	http.HandleFunc("/api/branches", handleListBranches)
 	http.HandleFunc("/api/checkout", handleCheckoutBranch)
+	http.HandleFunc("/api/init", handleInit)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
 	log.Printf("Starting AirGit on %s", addr)
@@ -558,5 +559,50 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{
 		Branch: branch,
 		Log:    []string{fmt.Sprintf("Switched to branch: %s", branch)},
+	})
+}
+
+func handleInit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	path := r.URL.Query().Get("path")
+	branch := r.URL.Query().Get("branch")
+
+	// If path is provided, update repo path
+	if path != "" {
+		config.RepoPath = path
+	}
+
+	// Get current branch
+	currentBranch, err := executeGitCommand("branch", "--show-current")
+	if err != nil || strings.TrimSpace(currentBranch) == "" {
+		currentBranch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to get branch: %v", err),
+			})
+			return
+		}
+	}
+
+	currentBranch = strings.TrimSpace(currentBranch)
+
+	// If branch is provided and different from current, checkout that branch
+	if branch != "" && branch != currentBranch {
+		output, err := executeGitCommand("checkout", branch)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to checkout branch '%s': %v. Output: %s", branch, err, output),
+				"path":  config.RepoPath,
+				"branch": currentBranch,
+			})
+			return
+		}
+		currentBranch = branch
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":   config.RepoPath,
+		"branch": currentBranch,
 	})
 }

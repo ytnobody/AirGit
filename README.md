@@ -99,6 +99,37 @@ Example using flags:
 ./airgit --ssh-host example.com --repo-path /var/git/my-repo --listen-port 9000
 ```
 
+## Permalink URLs with Repository Path and Branch
+
+You can create shareable URLs that automatically select a repository and branch when opened:
+
+```
+http://my-airgit-server:8000?path=/path/to/repository&branch=feature/branch-name
+```
+
+### Query Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `path` | Absolute path to the Git repository | `/var/git/my-repo` |
+| `branch` | Branch name to checkout | `feature/my-feature` |
+
+### Examples
+
+- **With repository only**: `http://localhost:8000?path=/home/user/projects/my-app`
+- **With branch only**: `http://localhost:8000?branch=develop`
+- **With both**: `http://localhost:8000?path=/var/git/repo&branch=vk/babe-url`
+
+When you open a URL with these parameters:
+1. The server changes to the specified repository (if `path` is provided)
+2. The branch is automatically checked out (if `branch` is provided and different from current)
+3. The UI displays the updated repository path and branch name
+
+This is useful for:
+- Sharing quick-push links to specific repositories
+- Creating bookmarks for frequently used repository + branch combinations
+- Automating repository setup in CI/CD workflows
+
 ## API Endpoints
 
 ### GET /api/status
@@ -120,6 +151,21 @@ Response:
 {
   "branch": "main",
   "log": ["$ git add .", "$ git commit...", "..."]
+}
+```
+
+### GET /api/init
+Initialize repository path and branch from URL parameters.
+
+Query Parameters:
+- `path` (optional): Repository path to switch to
+- `branch` (optional): Branch to checkout
+
+Response:
+```json
+{
+  "path": "/var/git/my-repo",
+  "branch": "main"
 }
 ```
 
