@@ -607,6 +607,102 @@ Response:
 4. Watch the spinner while operations execute
 5. View operation logs for details
 
+## Recommended Stack: Smartphone Vibe Coding Environment
+
+For an optimal mobile development experience, we recommend the following stack:
+
+### Architecture
+
+**Tailscale + Vibe-Kanban + AirGit** provides a seamless smartphone-based development workflow:
+
+```
+Smartphone
+    ↓ VPN (Tailscale)
+    ↓
+Development Server
+    ├── Vibe-Kanban (Task Management & AI Assistant)
+    └── AirGit (Git Operations)
+```
+
+### Components
+
+1. **Tailscale** 🔐
+   - Zero-config VPN connecting your smartphone securely to your development server
+   - Works across different networks (home, office, mobile hotspot)
+   - End-to-end encryption with no port forwarding needed
+   - Install: [tailscale.com](https://tailscale.com)
+
+2. **Vibe-Kanban** 📋
+   - AI-powered task management and project planning
+   - Kanban-style board for organizing development tasks
+   - Integrated AI assistant for code suggestions and task breakdown
+   - Lightweight web interface optimized for mobile
+
+3. **AirGit** 💾
+   - Browser-based Git operations (push, pull, branch management)
+   - Mobile-first UI with bottom navigation
+   - Direct repository access via REST API
+   - PWA support for home screen installation
+
+### Setup Steps
+
+1. **Install Tailscale on both devices:**
+   - Download from [tailscale.com](https://tailscale.com)
+   - Authenticate with your preferred SSO provider
+   - Note your server's Tailscale IP address
+
+2. **Start Vibe-Kanban on your development server:**
+   ```bash
+   # On your server machine
+   npm install
+   npm run dev
+   ```
+   Access via: `http://<tailscale-ip>:3000`
+
+3. **Start AirGit on your development server:**
+   - Download the latest binary from [AirGit Releases](../../releases)
+   - Choose the appropriate binary for your OS/architecture:
+     - `airgit-linux-amd64` - Linux (x86_64)
+     - `airgit-linux-arm64` - Linux (ARM64)
+     - `airgit-darwin-amd64` - macOS (Intel)
+     - `airgit-darwin-arm64` - macOS (Apple Silicon)
+   - Make it executable and run:
+   ```bash
+   # On your server machine
+   chmod +x airgit-linux-amd64
+   ./airgit-linux-amd64 --listen-addr 0.0.0.0 --listen-port 8080
+   ```
+   Access via: `http://<tailscale-ip>:8080`
+
+4. **Connect from your smartphone:**
+   - Ensure Tailscale is running on your phone
+   - Open browser and navigate to `http://<server-tailscale-ip>:3000` for Vibe-Kanban
+   - Open browser and navigate to `http://<server-tailscale-ip>:8080` for AirGit
+   - Install both as PWA apps (Add to Home Screen)
+
+### Workflow Example
+
+1. **Plan & Code**: Use Vibe-Kanban to break down tasks, generate code with AI, and review/commit changes
+2. **Manage Git**: Use AirGit on your smartphone to:
+   - Manage branches (create, switch, delete)
+   - Push changes to remote repositories
+   - Check repository status
+
+### Benefits
+
+- 🔒 **Secure**: Encrypted VPN connection via Tailscale (no public internet exposure)
+- 📱 **Mobile-Native**: Both apps optimized for smartphone interaction
+- 🔄 **Synchronized**: Real-time task and repository state across devices
+- 🎯 **Focused**: Mobile UI reduces distractions from desktop complexity
+- 💡 **AI-Assisted**: Leverage AI suggestions while on the move
+
+### Notes
+
+- All three components must be accessible on the same network (via Tailscale)
+- Tailscale provides secure, encrypted connectivity without port forwarding
+- Both Vibe-Kanban and AirGit support PWA installation for native-like mobile experience
+- Recommended to run on a Linux/macOS development server with consistent uptime
+
 ## Add to Home Screen (iOS/Android)
 
 1. Open AirGit in your browser
