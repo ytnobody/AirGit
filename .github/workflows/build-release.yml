@@ -63,6 +63,7 @@ jobs:
             NAMED_OUTPUT="airgit-${{ matrix.goos }}-${{ matrix.goarch }}"
           fi
           go build -v -o "build/${NAMED_OUTPUT}" .
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
