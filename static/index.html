@@ -426,13 +426,14 @@
                 if (response.ok) {
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
-                    console.log('PUSH success, showing logs');
-                    // Always show logs
+                    console.log('PUSH success');
                     if (data.log && Array.isArray(data.log) && data.log.length > 0) {
                         showLog(data.log);
                     } else {
                         showLog(['Push completed successfully']);
                     }
+                    // Reload status after push (similar to pull)
+                    loadStatus();
                 } else {
                     showError(data.error || 'Push failed');
                     if (data.log) {
