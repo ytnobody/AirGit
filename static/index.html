@@ -45,6 +45,7 @@
                     <h1 class="text-xl font-bold text-emerald-400" id="repo-name">AirGit</h1>
                     <div class="flex gap-2">
                         <button id="branch-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Branch</button>
+                        <button id="remotes-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Remotes</button>
                         <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
                     </div>
                 </div>
@@ -144,6 +145,40 @@
                 </div>
             </div>
         </div>
+
+        <!-- Remotes Management Modal -->
+        <div id="remotes-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Manage Remotes</h2>
+                <div id="remotes-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                </div>
+                <button id="add-remote-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ Add Remote</button>
+                <button id="remotes-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
+
+        <!-- Add/Edit Remote Modal -->
+        <div id="remote-form-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
+                <h2 id="remote-form-title" class="text-lg font-bold text-emerald-400 mb-4">Add Remote</h2>
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Remote Name</label>
+                        <input id="remote-name-input" type="text" placeholder="origin" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Repository URL</label>
+                        <input id="remote-url-input" type="text" placeholder="https://github.com/user/repo.git" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+                <div id="remote-form-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="remote-form-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Save</button>
+                    <button id="remote-form-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -181,6 +216,19 @@
         const createRepoSubmitBtn = document.getElementById('create-repo-submit');
         const createRepoCloseBtn = document.getElementById('create-repo-close-btn');
         const createRepoError = document.getElementById('create-repo-error');
+        const remotesSelectorBtn = document.getElementById('remotes-selector-btn');
+        const remotesModal = document.getElementById('remotes-modal');
+        const remotesList = document.getElementById('remotes-list');
+        const remotesModalCloseBtn = document.getElementById('remotes-modal-close-btn');
+        const addRemoteBtn = document.getElementById('add-remote-btn');
+        const remoteFormModal = document.getElementById('remote-form-modal');
+        const remoteFormTitle = document.getElementById('remote-form-title');
+        const remoteNameInput = document.getElementById('remote-name-input');
+        const remoteUrlInput = document.getElementById('remote-url-input');
+        const remoteFormSubmitBtn = document.getElementById('remote-form-submit');
+        const remoteFormCloseBtn = document.getElementById('remote-form-close-btn');
+        const remoteFormError = document.getElementById('remote-form-error');
+        let currentEditingRemote = null;
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -449,6 +497,38 @@
             createRepoModal.classList.add('hidden');
         });
 
+        remotesSelectorBtn.addEventListener('click', async () => {
+            remotesModal.classList.remove('hidden');
+            loadRemotes();
+        });
+
+        remotesModalCloseBtn.addEventListener('click', () => {
+            remotesModal.classList.add('hidden');
+        });
+
+        remotesModal.addEventListener('click', (e) => {
+            if (e.target === remotesModal) {
+                remotesModal.classList.add('hidden');
+            }
+        });
+
+        addRemoteBtn.addEventListener('click', () => {
+            remotesModal.classList.add('hidden');
+            openAddRemoteForm();
+        });
+
+        remoteFormCloseBtn.addEventListener('click', () => {
+            remoteFormModal.classList.add('hidden');
+        });
+
+        remoteFormModal.addEventListener('click', (e) => {
+            if (e.target === remoteFormModal) {
+                remoteFormModal.classList.add('hidden');
+            }
+        });
+
+        remoteFormSubmitBtn.addEventListener('click', saveRemote);
+
         createRepoModal.addEventListener('click', (e) => {
             if (e.target === createRepoModal) {
                 createRepoModal.classList.add('hidden');
@@ -506,6 +586,157 @@
         function showCreateRepoError(message) {
             createRepoError.textContent = message;
             createRepoError.classList.remove('hidden');
+        }
+
+        async function loadRemotes() {
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/remotes', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (response.ok && data.remotes) {
+                    displayRemotes(data.remotes);
+                } else if (data.error) {
+                    remotesList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
+                } else {
+                    remotesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load remotes</div>`;
+                }
+            } catch (error) {
+                console.error('Remotes load error:', error);
+                remotesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function displayRemotes(remotes) {
+            if (remotes.length === 0) {
+                remotesList.innerHTML = '<div class="text-center text-gray-400 text-sm">No remotes configured</div>';
+                return;
+            }
+
+            remotesList.innerHTML = remotes.map(remote => `
+                <div class="bg-gray-700 rounded px-4 py-3 text-gray-200 text-sm flex justify-between items-center">
+                    <div class="flex-1">
+                        <div class="font-semibold text-emerald-400">${escapeHtml(remote.name)}</div>
+                        <div class="text-xs text-gray-400 truncate">${escapeHtml(remote.url)}</div>
+                    </div>
+                    <div class="flex gap-2 ml-2">
+                        <button class="text-xs bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded text-white transition-colors"
+                                onclick="editRemote('${escapeHtml(remote.name)}', '${escapeHtml(remote.url)}')">Edit</button>
+                        <button class="text-xs bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white transition-colors"
+                                onclick="removeRemote('${escapeHtml(remote.name)}')">Remove</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openAddRemoteForm() {
+            currentEditingRemote = null;
+            remoteFormTitle.textContent = 'Add Remote';
+            remoteNameInput.value = '';
+            remoteUrlInput.value = '';
+            remoteFormError.classList.add('hidden');
+            remoteFormSubmitBtn.textContent = 'Add';
+            remoteNameInput.disabled = false;
+            remoteFormModal.classList.remove('hidden');
+            remoteNameInput.focus();
+        }
+
+        function editRemote(name, url) {
+            currentEditingRemote = name;
+            remoteFormTitle.textContent = 'Edit Remote';
+            remoteNameInput.value = name;
+            remoteUrlInput.value = url;
+            remoteFormError.classList.add('hidden');
+            remoteFormSubmitBtn.textContent = 'Update';
+            remoteNameInput.disabled = true;
+            remoteFormModal.classList.remove('hidden');
+            remoteUrlInput.focus();
+        }
+
+        async function removeRemote(name) {
+            if (!confirm(`Are you sure you want to remove the remote "${name}"?`)) {
+                return;
+            }
+
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/remote/remove', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    loadRemotes();
+                } else {
+                    alert(`Error: ${data.error || 'Failed to remove remote'}`);
+                }
+            } catch (error) {
+                alert(`Connection error: ${error.message}`);
+            }
+        }
+
+        async function saveRemote() {
+            const name = remoteNameInput.value.trim();
+            const url = remoteUrlInput.value.trim();
+
+            if (!name || !url) {
+                remoteFormError.textContent = 'Remote name and URL are required';
+                remoteFormError.classList.remove('hidden');
+                return;
+            }
+
+            remoteFormSubmitBtn.disabled = true;
+            const originalText = remoteFormSubmitBtn.textContent;
+            remoteFormSubmitBtn.textContent = 'Saving...';
+            remoteFormError.classList.add('hidden');
+
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                let endpoint = '/api/remote/add';
+                if (currentEditingRemote) {
+                    endpoint = '/api/remote/update';
+                }
+
+                const apiUrl = new URL(endpoint, window.location.origin);
+                if (repoPath) {
+                    apiUrl.searchParams.append('repoPath', repoPath);
+                }
+
+                const response = await fetch(apiUrl.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, url: url })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    remoteFormModal.classList.add('hidden');
+                    remoteFormSubmitBtn.disabled = false;
+                    remoteFormSubmitBtn.textContent = originalText;
+                    loadRemotes();
+                } else {
+                    remoteFormError.textContent = data.error || 'Failed to save remote';
+                    remoteFormError.classList.remove('hidden');
+                    remoteFormSubmitBtn.disabled = false;
+                    remoteFormSubmitBtn.textContent = originalText;
+                }
+            } catch (error) {
+                remoteFormError.textContent = 'Network error: ' + error.message;
+                remoteFormError.classList.remove('hidden');
+                remoteFormSubmitBtn.disabled = false;
+                remoteFormSubmitBtn.textContent = originalText;
+            }
         }
 
         closeSuccessBtn.addEventListener('click', () => {
