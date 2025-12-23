@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231f2937' width='180' height='180'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='80' font-weight='bold' fill='%2310b981' font-family='system-ui'>A</text></svg>">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%231f2937' width='32' height='32'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='24' font-weight='bold' fill='%2310b981' font-family='system-ui'>A</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         body {
             background-color: #111827;
@@ -37,19 +38,12 @@
     </style>
 </head>
 <body class="bg-gray-900 text-gray-50">
-    <div class="min-h-screen flex flex-col">
+    <div class="min-h-screen flex flex-col pb-24">
         <!-- Header -->
         <header class="bg-gray-800 border-b border-gray-700 px-4 py-4 safe-area-inset-top">
             <div class="max-w-sm mx-auto">
                 <div class="flex justify-between items-start mb-2">
                     <h1 class="text-xl font-bold text-emerald-400" id="repo-name">AirGit</h1>
-                    <div class="flex gap-2">
-                        <button id="commits-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Log</button>
-                        <button id="branch-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Branch</button>
-                        <button id="remotes-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Remotes</button>
-                        <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
-                        <button id="settings-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">⚙️</button>
-                    </div>
                 </div>
                 <div class="text-sm text-gray-400 space-y-1">
                     <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
@@ -59,6 +53,32 @@
                 </div>
             </div>
         </header>
+
+        <!-- Bottom Navigation Menu -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 px-4 py-2 safe-area-inset-bottom">
+            <div class="max-w-sm mx-auto flex justify-around items-center">
+                <button id="commits-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                    <i class="fas fa-clock text-lg"></i>
+                    <span class="text-xs font-medium">Log</span>
+                </button>
+                <button id="branch-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                    <i class="fas fa-folder-open text-lg"></i>
+                    <span class="text-xs font-medium">Branch</span>
+                </button>
+                <button id="remotes-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                    <i class="fas fa-cloud text-lg"></i>
+                    <span class="text-xs font-medium">Remotes</span>
+                </button>
+                <button id="repo-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                    <i class="fas fa-hard-drive text-lg"></i>
+                    <span class="text-xs font-medium">Repos</span>
+                </button>
+                <button id="settings-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                    <i class="fas fa-pen-to-square text-lg"></i>
+                    <span class="text-xs font-medium">Settings</span>
+                </button>
+            </div>
+        </nav>
 
         <!-- Main Content -->
         <main class="flex-1 flex items-center justify-center px-4 py-8 safe-area-inset-bottom">
