@@ -342,16 +342,21 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		logs = append(logs, output)
 	}
 	if err != nil {
-		resp := Response{
-			Error: fmt.Sprintf("git push failed: %v", err),
-			Log:   logs,
+		// Check if it's "everything up-to-date" which is not really an error
+		if strings.Contains(output, "up to date") || strings.Contains(output, "up-to-date") {
+			logs = append(logs, "✓ Everything is already up to date!")
+		} else {
+			resp := Response{
+				Error: fmt.Sprintf("git push failed: %v", err),
+				Log:   logs,
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
-		return
+	} else {
+		logs = append(logs, "✓ Push successful!")
 	}
-
-	logs = append(logs, "✓ Push successful!")
 
 	json.NewEncoder(w).Encode(Response{
 		Branch: branch,
