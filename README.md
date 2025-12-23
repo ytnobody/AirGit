@@ -1,25 +1,27 @@
 # AirGit
 
-A lightweight web-based GUI tool for pushing Git changes from mobile devices via SSH.
+A lightweight web-based GUI for managing Git repositories directly from your browser. Push, pull, create branches, manage remotes, and more - all through an intuitive mobile-friendly interface.
 
 ## Features
 
-- 📱 Mobile-optimized interface with single-tap push
-- 🔒 SSH public key authentication
-- 🚀 Standalone Go binary (no external dependencies)
-- 📴 PWA support (offline caching, home screen icon)
+- 📱 Mobile-optimized interface with single-tap operations
+- 📚 Multiple repository management (local filesystem)
+- 🌿 Full branch management (list, create, checkout, delete)
+- 🔄 Git operations (push, pull, status)
+- 🌐 Remote management (add, update, remove, select)
+- 💾 Repository initialization and creation
+- 📊 Ahead/behind commit tracking
 - 🎨 Dark mode UI optimized for mobile
-- ⚡ Real-time branch and server info display
-- 🌐 Support for multiple remotes (origin, upstream, etc.)
-- 📊 Track ahead/behind commits relative to remote tracking branch
+- 📴 PWA support (offline caching, home screen icon)
+- 🚀 Standalone Go binary
 
 ## Quick Start
 
 ### Prerequisites
 
 - Go 1.21+
-- SSH access to remote server with Git repository
-- SSH public key configured on remote server
+- Git installed
+- Local Git repositories accessible on the file system
 
 ### Installation
 
@@ -30,13 +32,12 @@ A lightweight web-based GUI tool for pushing Git changes from mobile devices via
 go build -o airgit
 ```
 
-3. Set up environment variables or use command-line flags:
+3. Set up environment variables (optional) or use command-line flags:
 
 ```bash
-export AIRGIT_SSH_HOST=your-server.com
-export AIRGIT_SSH_USER=git
-export AIRGIT_SSH_KEY=$HOME/.ssh/id_rsa
-export AIRGIT_REPO_PATH=/var/git/my-repo
+export AIRGIT_LISTEN_ADDR=0.0.0.0
+export AIRGIT_LISTEN_PORT=8080
+export AIRGIT_REPO_PATH=$HOME
 ```
 
 4. Run:
@@ -71,11 +72,7 @@ Configure via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AIRGIT_SSH_HOST` | `localhost` | SSH server hostname |
-| `AIRGIT_SSH_PORT` | `22` | SSH server port |
-| `AIRGIT_SSH_USER` | `git` | SSH username |
-| `AIRGIT_SSH_KEY` | `~/.ssh/id_rsa` | Path to SSH private key |
-| `AIRGIT_REPO_PATH` | `/var/git/repo` | Absolute path to Git repository on remote server |
+| `AIRGIT_REPO_PATH` | `$HOME` | Base path for repositories (default: user home directory) |
 | `AIRGIT_LISTEN_ADDR` | `0.0.0.0` | Server listen address |
 | `AIRGIT_LISTEN_PORT` | `8080` | Server listen port |
 
@@ -87,59 +84,57 @@ Alternatively, use command-line flags (which override environment variables):
 |------|-------------|
 | `-h`, `--help` | Show help message |
 | `-v`, `--version` | Show version information |
-| `--ssh-host <host>` | SSH server hostname |
-| `--ssh-port <port>` | SSH server port |
-| `--ssh-user <user>` | SSH username |
-| `--ssh-key <path>` | Path to SSH private key |
-| `--repo-path <path>` | Absolute path to Git repository on remote server |
-| `--listen-addr <addr>` | Server listen address |
-| `--listen-port <port>` | Server listen port |
+| `--repo-path <path>` | Base path for repositories (default: $HOME) |
+| `--listen-addr <addr>` | Server listen address (default: 0.0.0.0) |
+| `--listen-port <port>` | Server listen port (default: 8080) |
+| `-p <port>` | Server listen port (shorthand) |
 
 Example using flags:
 
 ```bash
-./airgit --ssh-host example.com --repo-path /var/git/my-repo --listen-port 9000
+./airgit --repo-path /var/git --listen-port 9000
 ```
 
-## Permalink URLs with Repository Path and Branch
+## Multiple Repositories
 
-You can create shareable URLs that automatically select a repository and branch when opened:
-
-```
-http://my-airgit-server:8000?path=/path/to/repository&branch=feature/branch-name
-```
+AirGit supports managing multiple Git repositories on the same filesystem. All repositories must be within the configured `AIRGIT_REPO_PATH` base directory.
 
 ### Query Parameters
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| `path` | Absolute path to the Git repository | `/var/git/my-repo` |
+| `path` | Relative path to the Git repository | `projects/my-app` or `/absolute/path` |
 | `branch` | Branch name to checkout | `feature/my-feature` |
 
 ### Examples
 
-- **With repository only**: `http://localhost:8000?path=/home/user/projects/my-app`
-- **With branch only**: `http://localhost:8000?branch=develop`
-- **With both**: `http://localhost:8000?path=/var/git/repo&branch=vk/babe-url`
+- **Load specific repository**: `http://localhost:8000?path=projects/my-repo`
+- **Checkout branch**: `http://localhost:8000?branch=develop`
+- **Both**: `http://localhost:8000?path=projects/repo&branch=feature/new`
 
 When you open a URL with these parameters:
-1. The server changes to the specified repository (if `path` is provided)
+1. The server loads the specified repository (if `path` is provided)
 2. The branch is automatically checked out (if `branch` is provided and different from current)
 3. The UI displays the updated repository path and branch name
 
-This is useful for:
-- Sharing quick-push links to specific repositories
-- Creating bookmarks for frequently used repository + branch combinations
-- Automating repository setup in CI/CD workflows
+## Managing Remotes
 
-## Using Remote Repositories
+### Web UI Remote Management
 
-### Query Multiple Remotes
+The AirGit frontend includes a complete UI for managing Git remotes:
 
-To view all configured remotes in a repository:
+1. Click the **"Remotes"** button in the header navigation bar
+2. View all configured remotes for the current repository
+3. **Add** a new remote with name and URL
+4. **Edit** a remote's URL
+5. **Remove** a remote from the repository
+
+### REST API - Remote Management
+
+#### Get All Remotes
 
 ```bash
-curl http://localhost:8080/api/remotes
+GET /api/remotes
 ```
 
 Response:
@@ -148,43 +143,61 @@ Response:
   "remotes": [
     {
       "name": "origin",
-      "url": "git@github.com:user/repo.git"
+      "url": "https://github.com/user/repo.git"
     },
     {
       "name": "upstream",
-      "url": "git@github.com:org/repo.git"
+      "url": "https://github.com/org/repo.git"
     }
   ]
 }
 ```
 
-### Push to a Specific Remote
-
-Specify the `remote` query parameter when pushing:
+#### Add Remote
 
 ```bash
-curl -X POST http://localhost:8080/api/push?remote=upstream
+POST /api/remote/add
 ```
 
-### Pull from a Specific Remote
+Request:
+```json
+{
+  "name": "upstream",
+  "url": "https://github.com/user/upstream.git"
+}
+```
 
-Specify the `remote` query parameter when pulling:
+#### Update Remote
 
 ```bash
-curl -X POST http://localhost:8080/api/pull?remote=upstream
+POST /api/remote/update
 ```
 
-### Examples with Different Remotes
+Request:
+```json
+{
+  "name": "origin",
+  "url": "https://github.com/newowner/repo.git"
+}
+```
 
-- **Push to origin**: `POST /api/push?remote=origin`
-- **Push to upstream**: `POST /api/push?remote=upstream`
-- **Pull from origin**: `POST /api/pull?remote=origin`
-- **Pull from upstream**: `POST /api/pull?remote=upstream`
+#### Remove Remote
+
+```bash
+POST /api/remote/remove
+```
+
+Request:
+```json
+{
+  "name": "origin"
+}
+```
 
 ## API Endpoints
 
 ### GET /api/status
-Returns current branch name, server info, and tracking information.
+Returns current repository status including branch name and ahead/behind counts.
 
 Response:
 ```json
@@ -196,10 +209,8 @@ Response:
 }
 ```
 
-The `ahead` and `behind` fields indicate how many commits the local branch is ahead of or behind the tracking branch (e.g., `origin/main`). If no tracking branch is configured, both values will be 0.
-
 ### POST /api/push
-Executes: `git add .` → `git commit -m "Updated via AirGit"` → `git push [remote] [branch]`
+Executes: `git add .` → `git commit -m "Updated via AirGit"` → `git push [remote]`
 
 Query Parameters:
 - `remote` (optional): Remote name to push to (default: `origin`)
@@ -213,7 +224,7 @@ Response:
 ```
 
 ### POST /api/pull
-Executes: `git pull [remote] [branch]`
+Executes: `git pull [remote]`
 
 Query Parameters:
 - `remote` (optional): Remote name to pull from (default: `origin`)
@@ -246,13 +257,115 @@ Response:
 }
 ```
 
-The `ahead` and `behind` fields show how many commits the branch is ahead of or behind its tracking branch.
+### GET /api/branches
+List all branches in the repository.
+
+Response:
+```json
+{
+  "branches": ["main", "develop", "feature/new"],
+  "current": "main"
+}
+```
+
+### POST /api/branch/create
+Create a new branch.
+
+Request Body:
+```json
+{
+  "branch": "feature/new-feature"
+}
+```
+
+Response:
+```json
+{
+  "branch": "feature/new-feature",
+  "log": ["Branch created and checked out"]
+}
+```
+
+### GET /api/repos
+List all repositories in the configured base path.
+
+Response:
+```json
+{
+  "repos": [
+    {
+      "path": "/home/user/projects/repo1",
+      "name": "repo1",
+      "branch": "main",
+      "isBare": false
+    },
+    {
+      "path": "/home/user/projects/repo2",
+      "name": "repo2",
+      "branch": "develop",
+      "isBare": false
+    }
+  ]
+}
+```
+
+### POST /api/load-repo
+Load a specific repository.
+
+Request Body:
+```json
+{
+  "path": "projects/my-repo"
+}
+```
+
+Response:
+```json
+{
+  "path": "projects/my-repo",
+  "branch": "main",
+  "log": ["Repository loaded"]
+}
+```
+
+### POST /api/repo/create
+Create a new repository.
+
+Request Body:
+```json
+{
+  "path": "projects/new-repo"
+}
+```
+
+Response:
+```json
+{
+  "path": "projects/new-repo",
+  "log": ["Repository created"]
+}
+```
+
+### POST /api/repo/init
+Initialize a repository from an existing directory.
+
+Request Body:
+```json
+{
+  "path": "projects/existing-dir"
+}
+```
+
+Response:
+```json
+{
+  "path": "projects/existing-dir",
+  "log": ["Repository initialized"]
+}
+```
 
 ### GET /api/remotes
-Returns list of remote repositories configured in the Git repository.
-
-Query Parameters:
-- `repoPath` (optional): Path to the repository
+Get all remotes in the current repository.
 
 Response:
 ```json
@@ -260,47 +373,63 @@ Response:
   "remotes": [
     {
       "name": "origin",
-      "url": "git@github.com:user/repo.git"
-    },
-    {
-      "name": "upstream",
-      "url": "git@github.com:org/repo.git"
+      "url": "https://github.com/user/repo.git"
     }
   ]
 }
 ```
 
-### GET /api/init
-Initialize repository path and branch from URL parameters.
+### POST /api/remote/add
+Add a new remote.
 
-Query Parameters:
-- `path` (optional): Repository path to switch to
-- `branch` (optional): Branch to checkout
-
-Response:
+Request Body:
 ```json
 {
-  "path": "/var/git/my-repo",
-  "branch": "main"
+  "name": "upstream",
+  "url": "https://github.com/org/repo.git"
+}
+```
+
+### POST /api/remote/update
+Update a remote's URL.
+
+Request Body:
+```json
+{
+  "name": "origin",
+  "url": "https://github.com/newowner/repo.git"
+}
+```
+
+### POST /api/remote/remove
+Remove a remote.
+
+Request Body:
+```json
+{
+  "name": "upstream"
 }
 ```
 
 ## How It Works
 
-1. **Frontend** (HTML5 + Tailwind CSS): Simple one-button mobile UI served via embed
-2. **Backend** (Go): 
-   - Exposes HTTP API
-   - Connects to remote server via SSH
-   - Executes git commands via SSH session
-   - Streams/returns logs to frontend
+1. **Frontend** (HTML5 + Tailwind CSS): Simple, mobile-first UI with intuitive navigation
+2. **Backend** (Go):
+   - Exposes comprehensive HTTP REST API
+   - Executes git commands locally
+   - Manages multiple repositories in a base directory
+   - Streams logs and results to frontend
+   - Handles errors gracefully
 
 ## Mobile Usage
 
 1. Open AirGit in your phone's browser
-2. See current branch at the top
-3. Tap the large **PUSH** button
-4. Watch the spinner while it commits and pushes
-5. See "Success!" confirmation
+2. Browse repositories using the **Repos** button
+3. Manage branches using the **Branch** button
+4. Manage remotes using the **Remotes** button
+5. Tap **PUSH** or **PULL** buttons to perform operations
+6. Watch the spinner while operations execute
+7. View operation logs for details
 
 ## Add to Home Screen (iOS/Android)
 
@@ -315,10 +444,17 @@ The PWA manifest and service worker enable offline caching and home screen insta
 ```
 Mobile Browser
     ↓ HTTP
-  AirGit Server (Go)
-    ↓ SSH
-  Remote Git Repository
+AirGit Server (Go)
+    ↓ Local File System
+Local Git Repositories
 ```
+
+### Components
+
+- **Frontend UI**: Navigation bar with Branch, Remotes, Repos buttons; operation buttons (Push, Pull)
+- **REST API**: 17 endpoints for repository and git operations
+- **Git Executor**: Executes git commands locally on the filesystem
+- **Repository Manager**: Handles multiple repositories within base directory
 
 ## License
 
