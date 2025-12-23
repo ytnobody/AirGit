@@ -10,10 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"golang.org/x/crypto/ssh"
 )
 
 const version = "1.0.0"
@@ -22,13 +21,9 @@ const version = "1.0.0"
 var staticFiles embed.FS
 
 type Config struct {
-	SSHHost       string
-	SSHPort       string
-	SSHUser       string
-	SSHKeyPath    string
-	RepoPath      string
-	ListenAddr    string
-	ListenPort    string
+	RepoPath   string
+	ListenAddr string
+	ListenPort string
 }
 
 type Response struct {
@@ -48,17 +43,12 @@ var config Config
 
 func init() {
 	config = Config{
-		SSHHost:    getEnv("AIRGIT_SSH_HOST", "localhost"),
-		SSHPort:    getEnv("AIRGIT_SSH_PORT", "22"),
-		SSHUser:    getEnv("AIRGIT_SSH_USER", "git"),
-		SSHKeyPath: getEnv("AIRGIT_SSH_KEY", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa")),
 		RepoPath:   getEnv("AIRGIT_REPO_PATH", os.Getenv("HOME")),
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
 		ListenPort: getEnv("AIRGIT_LISTEN_PORT", "8080"),
 	}
 
-	log.Printf("Config: Host=%s Port=%s User=%s RepoPath=%s", 
-		config.SSHHost, config.SSHPort, config.SSHUser, config.RepoPath)
+	log.Printf("Config: RepoPath=%s", config.RepoPath)
 }
 
 func getEnv(key, defaultVal string) string {
@@ -71,10 +61,6 @@ func getEnv(key, defaultVal string) string {
 func main() {
 	var showHelp bool
 	var showVersion bool
-	var sshHost string
-	var sshPort string
-	var sshUser string
-	var sshKey string
 	var repoPath string
 	var listenAddr string
 	var listenPort string
@@ -83,11 +69,7 @@ func main() {
 	flag.BoolVar(&showHelp, "h", false, "Show help message (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
-	flag.StringVar(&sshHost, "ssh-host", "", "SSH server hostname (default: localhost)")
-	flag.StringVar(&sshPort, "ssh-port", "", "SSH server port (default: 22)")
-	flag.StringVar(&sshUser, "ssh-user", "", "SSH username (default: git)")
-	flag.StringVar(&sshKey, "ssh-key", "", "Path to SSH private key (default: ~/.ssh/id_rsa)")
-	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository on remote server (default: $HOME)")
+	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository (default: $HOME)")
 	flag.StringVar(&listenAddr, "listen-addr", "", "Server listen address (default: 0.0.0.0)")
 	flag.StringVar(&listenPort, "listen-port", "", "Server listen port (default: 8080)")
 	flag.StringVar(&listenPort, "port", "", "Server listen port (alias for --listen-port, default: 8080)")
@@ -106,18 +88,6 @@ func main() {
 	}
 
 	// Override config with command-line flags if provided
-	if sshHost != "" {
-		config.SSHHost = sshHost
-	}
-	if sshPort != "" {
-		config.SSHPort = sshPort
-	}
-	if sshUser != "" {
-		config.SSHUser = sshUser
-	}
-	if sshKey != "" {
-		config.SSHKeyPath = sshKey
-	}
 	if repoPath != "" {
 		config.RepoPath = repoPath
 	}
@@ -151,23 +121,18 @@ Usage: airgit [options]
 Options:
   -h, --help                Show this help message
   -v, --version             Show version information
-  --ssh-host <host>         SSH server hostname (env: AIRGIT_SSH_HOST, default: localhost)
-  --ssh-port <port>         SSH server port (env: AIRGIT_SSH_PORT, default: 22)
-  --ssh-user <user>         SSH username (env: AIRGIT_SSH_USER, default: git)
-  --ssh-key <path>          Path to SSH private key (env: AIRGIT_SSH_KEY, default: ~/.ssh/id_rsa)
-  --repo-path <path>        Absolute path to Git repository on remote server (env: AIRGIT_REPO_PATH, default: $HOME)
+  --repo-path <path>        Absolute path to Git repository (env: AIRGIT_REPO_PATH, default: $HOME)
   --listen-addr <addr>      Server listen address (env: AIRGIT_LISTEN_ADDR, default: 0.0.0.0)
   -p, --port, --listen-port <port>
                             Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
 
 Examples:
   # Using environment variables
-  export AIRGIT_SSH_HOST=example.com
-  export AIRGIT_REPO_PATH=/var/git/my-repo
+  export AIRGIT_REPO_PATH=/path/to/repo
   airgit
 
   # Using command-line flags
-  airgit --ssh-host example.com --repo-path /var/git/my-repo
+  airgit --repo-path /path/to/repo
 
   # Using port option
   airgit -p 3000
@@ -231,11 +196,9 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	branch = strings.TrimSpace(branch)
-	serverInfo := fmt.Sprintf("%s@%s", config.SSHUser, config.SSHHost)
 
 	json.NewEncoder(w).Encode(Response{
 		Branch: branch,
-		Server: serverInfo,
 	})
 }
 
@@ -388,42 +351,21 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	branch = strings.TrimSpace(branch)
-	serverInfo := fmt.Sprintf("%s@%s", config.SSHUser, config.SSHHost)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": branch,
-		"server": serverInfo,
 	})
 }
 
 func executeGitCommand(args ...string) (string, error) {
-	sshConfig, err := createSSHConfig()
-	if err != nil {
-		return "", fmt.Errorf("SSH config error: %v", err)
-	}
-
-	client, err := ssh.Dial("tcp", net.JoinHostPort(config.SSHHost, config.SSHPort), sshConfig)
-	if err != nil {
-		return "", fmt.Errorf("SSH dial error: %v", err)
-	}
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		return "", fmt.Errorf("SSH session error: %v", err)
-	}
-	defer session.Close()
-
-	// Build git command
-	gitCmd := fmt.Sprintf("cd %s && git %s", 
-		shellQuote(config.RepoPath), 
-		strings.Join(quoteArgs(args), " "))
+	cmd := exec.Command("git", args...)
+	cmd.Dir = config.RepoPath
 
 	var output bytes.Buffer
-	session.Stdout = &output
-	session.Stderr = &output
+	cmd.Stdout = &output
+	cmd.Stderr = &output
 
-	err = session.Run(gitCmd)
+	err := cmd.Run()
 
 	result := strings.TrimSpace(output.String())
 
@@ -439,88 +381,32 @@ func executeGitCommand(args ...string) (string, error) {
 	return result, nil
 }
 
-func createSSHConfig() (*ssh.ClientConfig, error) {
-	keyBytes, err := os.ReadFile(config.SSHKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read key file: %v", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse key: %v", err)
-	}
-
-	return &ssh.ClientConfig{
-		User: config.SSHUser,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return nil // Disable host key verification for simplicity
-		},
-	}, nil
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
-}
-
-func quoteArgs(args []string) []string {
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
-	}
-	return quoted
-}
 
 func listRepositories(basePath string) ([]Repository, error) {
-	sshConfig, err := createSSHConfig()
-	if err != nil {
-		return nil, fmt.Errorf("SSH config error: %v", err)
-	}
-
-	client, err := ssh.Dial("tcp", net.JoinHostPort(config.SSHHost, config.SSHPort), sshConfig)
-	if err != nil {
-		return nil, fmt.Errorf("SSH dial error: %v", err)
-	}
-	defer client.Close()
-
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("SSH session error: %v", err)
-	}
-	defer session.Close()
-
-	// Execute find command to locate git repositories
-	cmd := fmt.Sprintf("find %s -maxdepth 2 -name .git -type d 2>/dev/null | grep -o '.*/[^/]*/.git$' | sed 's|/.git$||'", shellQuote(basePath))
-	
-	var output bytes.Buffer
-	session.Stdout = &output
-	session.Stderr = &output
-
-	err = session.Run(cmd)
-	if err != nil {
-		// It's okay if find returns no results
-		return []Repository{}, nil
-	}
-
 	var repos []Repository
-	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
-	
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+
+	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
 		}
-		
-		// Extract repository name from path
-		parts := strings.Split(line, "/")
-		name := parts[len(parts)-1]
-		
-		repos = append(repos, Repository{
-			Name: name,
-			Path: line,
-		})
+
+		if info.Name() == ".git" && info.IsDir() {
+			repoPath := filepath.Dir(path)
+			name := filepath.Base(repoPath)
+
+			repos = append(repos, Repository{
+				Name: name,
+				Path: repoPath,
+			})
+
+			return filepath.SkipDir
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list repositories: %v", err)
 	}
 
 	return repos, nil
