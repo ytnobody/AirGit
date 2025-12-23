@@ -39,6 +39,11 @@ type Response struct {
 	Commit string      `json:"commit,omitempty"`
 }
 
+type Repository struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 var config Config
 
 func init() {
@@ -128,6 +133,8 @@ func main() {
 	http.HandleFunc("/service-worker.js", serveServiceWorker)
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/push", handlePush)
+	http.HandleFunc("/api/repos", handleListRepos)
+	http.HandleFunc("/api/select-repo", handleSelectRepo)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
 	log.Printf("Starting AirGit on %s", addr)
@@ -312,6 +319,71 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleListRepos(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	repos, err := listRepositories(config.RepoPath)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to list repos: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"repositories": repos,
+	})
+}
+
+func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	if req.Path == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Path is required",
+		})
+		return
+	}
+
+	config.RepoPath = req.Path
+
+	// Load status after changing repo
+	branch, err := executeGitCommand("branch", "--show-current")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to get branch: %v", err),
+		})
+		return
+	}
+
+	branch = strings.TrimSpace(branch)
+	serverInfo := fmt.Sprintf("%s@%s", config.SSHUser, config.SSHHost)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"branch": branch,
+		"server": serverInfo,
+	})
+}
+
 func executeGitCommand(args ...string) (string, error) {
 	sshConfig, err := createSSHConfig()
 	if err != nil {
@@ -387,4 +459,31 @@ func quoteArgs(args []string) []string {
 		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
 	}
 	return quoted
+}
+
+func listRepositories(basePath string) ([]Repository, error) {
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var repos []Repository
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		repoPath := filepath.Join(basePath, entry.Name())
+		gitPath := filepath.Join(repoPath, ".git")
+
+		// Check if it's a git repository
+		if _, err := os.Stat(gitPath); err == nil {
+			repos = append(repos, Repository{
+				Name: entry.Name(),
+				Path: repoPath,
+			})
+		}
+	}
+
+	return repos, nil
 }

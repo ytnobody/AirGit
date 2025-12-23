@@ -41,7 +41,10 @@
         <!-- Header -->
         <header class="bg-gray-800 border-b border-gray-700 px-4 py-4 safe-area-inset-top">
             <div class="max-w-sm mx-auto">
-                <h1 class="text-xl font-bold text-emerald-400 mb-2">AirGit</h1>
+                <div class="flex justify-between items-start mb-2">
+                    <h1 class="text-xl font-bold text-emerald-400">AirGit</h1>
+                    <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
+                </div>
                 <div class="text-sm text-gray-400 space-y-1">
                     <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
                     <div>Server: <span id="server-info" class="font-mono text-gray-200">Loading...</span></div>
@@ -85,6 +88,17 @@
                 </div>
             </div>
         </main>
+
+        <!-- Repository Selector Modal -->
+        <div id="repo-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Select Repository</h2>
+                <div id="repos-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                </div>
+                <button id="modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -102,6 +116,10 @@
         const logOutput = document.getElementById('log-output');
         const branchName = document.getElementById('branch-name');
         const serverInfo = document.getElementById('server-info');
+        const repoSelectorBtn = document.getElementById('repo-selector-btn');
+        const repoModal = document.getElementById('repo-modal');
+        const reposList = document.getElementById('repos-list');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
 
         async function loadStatus() {
             try {
@@ -117,6 +135,56 @@
             } catch (error) {
                 branchName.textContent = 'Error';
                 serverInfo.textContent = 'Connection failed';
+            }
+        }
+
+        async function loadRepositories() {
+            try {
+                const response = await fetch('/api/repos');
+                const data = await response.json();
+                if (response.ok && data.repositories) {
+                    displayRepositories(data.repositories);
+                } else {
+                    reposList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error || 'Failed to load repositories'}</div>`;
+                }
+            } catch (error) {
+                reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed</div>`;
+            }
+        }
+
+        function displayRepositories(repos) {
+            if (repos.length === 0) {
+                reposList.innerHTML = '<div class="text-center text-gray-400 text-sm">No repositories found</div>';
+                return;
+            }
+
+            reposList.innerHTML = repos.map(repo => `
+                <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
+                        onclick="selectRepository('${repo.name}', '${repo.path}')">
+                    <div class="font-semibold text-emerald-400">${escapeHtml(repo.name)}</div>
+                    <div class="text-xs text-gray-400 truncate">${escapeHtml(repo.path)}</div>
+                </button>
+            `).join('');
+        }
+
+        async function selectRepository(name, path) {
+            try {
+                const response = await fetch('/api/select-repo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    branchName.textContent = data.branch || 'unknown';
+                    serverInfo.textContent = data.server || 'unknown';
+                    repoModal.classList.add('hidden');
+                } else {
+                    alert(`Error selecting repository: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert(`Connection error: ${error.message}`);
             }
         }
 
@@ -146,6 +214,21 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        repoSelectorBtn.addEventListener('click', () => {
+            repoModal.classList.remove('hidden');
+            loadRepositories();
+        });
+
+        modalCloseBtn.addEventListener('click', () => {
+            repoModal.classList.add('hidden');
+        });
+
+        repoModal.addEventListener('click', (e) => {
+            if (e.target === repoModal) {
+                repoModal.classList.add('hidden');
+            }
+        });
 
         pushButton.addEventListener('click', async () => {
             resetUI();
