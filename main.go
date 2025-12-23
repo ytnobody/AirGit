@@ -474,27 +474,53 @@ func quoteArgs(args []string) []string {
 }
 
 func listRepositories(basePath string) ([]Repository, error) {
-	entries, err := os.ReadDir(basePath)
+	sshConfig, err := createSSHConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SSH config error: %v", err)
+	}
+
+	client, err := ssh.Dial("tcp", net.JoinHostPort(config.SSHHost, config.SSHPort), sshConfig)
+	if err != nil {
+		return nil, fmt.Errorf("SSH dial error: %v", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("SSH session error: %v", err)
+	}
+	defer session.Close()
+
+	// Execute find command to locate git repositories
+	cmd := fmt.Sprintf("find %s -maxdepth 2 -name .git -type d 2>/dev/null | grep -o '.*/[^/]*/.git$' | sed 's|/.git$||'", shellQuote(basePath))
+	
+	var output bytes.Buffer
+	session.Stdout = &output
+	session.Stderr = &output
+
+	err = session.Run(cmd)
+	if err != nil {
+		// It's okay if find returns no results
+		return []Repository{}, nil
 	}
 
 	var repos []Repository
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-
-		repoPath := filepath.Join(basePath, entry.Name())
-		gitPath := filepath.Join(repoPath, ".git")
-
-		// Check if it's a git repository
-		if _, err := os.Stat(gitPath); err == nil {
-			repos = append(repos, Repository{
-				Name: entry.Name(),
-				Path: repoPath,
-			})
-		}
+		
+		// Extract repository name from path
+		parts := strings.Split(line, "/")
+		name := parts[len(parts)-1]
+		
+		repos = append(repos, Repository{
+			Name: name,
+			Path: line,
+		})
 	}
 
 	return repos, nil
