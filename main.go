@@ -111,6 +111,7 @@ func main() {
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
 	http.HandleFunc("/api/branches", handleListBranches)
 	http.HandleFunc("/api/checkout", handleCheckoutBranch)
+	http.HandleFunc("/api/repo/create", handleCreateRepo)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -884,5 +885,123 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": currentBranch,
+	})
+}
+
+func handleCreateRepo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		RepoName  string `json:"repoName"`
+		Subdirs   string `json:"subdirs"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	if req.RepoName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Repository name is required",
+		})
+		return
+	}
+
+	// Resolve the repository path safely
+	resolvedPath := filepath.Join(baseRepoPath, req.RepoName)
+	resolvedPath, err := filepath.Abs(resolvedPath)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid path",
+		})
+		return
+	}
+
+	// Check that resolved path is within the base repo path
+	basePath, _ := filepath.Abs(baseRepoPath)
+	if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Path traversal not allowed",
+		})
+		return
+	}
+
+	// Check if directory already exists
+	if _, err := os.Stat(resolvedPath); err == nil {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Repository directory already exists: %s", req.RepoName),
+		})
+		return
+	}
+
+	// Create the repository directory
+	if err := os.MkdirAll(resolvedPath, 0755); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to create directory: %v", err),
+		})
+		return
+	}
+
+	// Create subdirectories if specified
+	if req.Subdirs != "" {
+		subdirs := strings.Split(req.Subdirs, ",")
+		for _, subdir := range subdirs {
+			subdir = strings.TrimSpace(subdir)
+			if subdir != "" {
+				subdirPath := filepath.Join(resolvedPath, subdir)
+				if err := os.MkdirAll(subdirPath, 0755); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					json.NewEncoder(w).Encode(Response{
+						Error: fmt.Sprintf("Failed to create subdirectory '%s': %v", subdir, err),
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// Change to the new directory and initialize git repository
+	originalRepoPath := config.RepoPath
+	config.RepoPath = resolvedPath
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var logs []string
+
+	// Initialize git repository
+	output, err := executeGitCommand("init")
+	logs = append(logs, "$ git init")
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to initialize git repository: %v", err),
+			Log:   logs,
+		})
+		return
+	}
+
+	logs = append(logs, fmt.Sprintf("✓ Repository '%s' created and initialized!", req.RepoName))
+
+	json.NewEncoder(w).Encode(Response{
+		RepoName: req.RepoName,
+		Log:      logs,
 	})
 }
