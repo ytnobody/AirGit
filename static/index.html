@@ -340,9 +340,23 @@
         }
 
         function showLog(lines) {
-            logOutput.innerHTML = lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
-            logContainer.classList.remove('hidden');
-            logOutput.scrollTop = logOutput.scrollHeight;
+            try {
+                console.log('showLog called');
+                logContainer.classList.remove('hidden');
+                logOutput.innerHTML = '';
+                if (Array.isArray(lines)) {
+                    lines.forEach(line => {
+                        const div = document.createElement('div');
+                        div.textContent = line;
+                        logOutput.appendChild(div);
+                    });
+                }
+                logOutput.scrollTop = logOutput.scrollHeight;
+            } catch (error) {
+                console.error('showLog error:', error);
+                logContainer.classList.remove('hidden');
+                logOutput.textContent = 'Error displaying log';
+            }
         }
 
         function escapeHtml(text) {
@@ -407,7 +421,12 @@
                 if (response.ok) {
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
-                    showLog(data.log || ['Push completed']);
+                    console.log('Push success, logs:', data.log);
+                    if (data.log && data.log.length > 0) {
+                        showLog(data.log);
+                    } else {
+                        showLog(['Push completed successfully']);
+                    }
                 } else {
                     showError(data.error || 'Push failed');
                     if (data.log) {
