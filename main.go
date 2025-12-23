@@ -112,6 +112,7 @@ func main() {
 	http.HandleFunc("/api/branches", handleListBranches)
 	http.HandleFunc("/api/checkout", handleCheckoutBranch)
 	http.HandleFunc("/api/repo/create", handleCreateRepo)
+	http.HandleFunc("/api/repo/init", handleInitRepo)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -1002,6 +1003,108 @@ func handleCreateRepo(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(Response{
 		RepoName: req.RepoName,
+		Log:      logs,
+	})
+}
+
+func handleInitRepo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		RepoPath string `json:"repoPath"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	if req.RepoPath == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Repository path is required",
+		})
+		return
+	}
+
+	// Resolve the repository path safely
+	resolvedPath := filepath.Join(baseRepoPath, req.RepoPath)
+	resolvedPath, err := filepath.Abs(resolvedPath)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid path",
+		})
+		return
+	}
+
+	// Check that resolved path is within the base repo path
+	basePath, _ := filepath.Abs(baseRepoPath)
+	if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Path traversal not allowed",
+		})
+		return
+	}
+
+	// Check if directory exists
+	info, err := os.Stat(resolvedPath)
+	if err != nil || !info.IsDir() {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Directory does not exist: %s", req.RepoPath),
+		})
+		return
+	}
+
+	// Check if already a git repository
+	gitDir := filepath.Join(resolvedPath, ".git")
+	if _, err := os.Stat(gitDir); err == nil {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Directory is already a git repository: %s", req.RepoPath),
+		})
+		return
+	}
+
+	// Change to the directory and initialize git repository
+	originalRepoPath := config.RepoPath
+	config.RepoPath = resolvedPath
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var logs []string
+
+	// Initialize git repository
+	output, err := executeGitCommand("init")
+	logs = append(logs, "$ git init")
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to initialize git repository: %v", err),
+			Log:   logs,
+		})
+		return
+	}
+
+	repoName := filepath.Base(resolvedPath)
+	logs = append(logs, fmt.Sprintf("✓ Repository '%s' initialized!", repoName))
+
+	json.NewEncoder(w).Encode(Response{
+		RepoName: repoName,
 		Log:      logs,
 	})
 }
