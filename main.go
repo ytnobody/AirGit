@@ -691,32 +691,6 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoPath := r.URL.Query().Get("repoPath")
-	
-	// Use provided repoPath or fall back to config.RepoPath
-	originalRepoPath := config.RepoPath
-	if repoPath != "" {
-		// Resolve and validate the path
-		var resolvedPath string
-		var err error
-		if filepath.IsAbs(repoPath) {
-			resolvedPath = repoPath
-		} else {
-			resolvedPath = filepath.Join(originalRepoPath, repoPath)
-		}
-		resolvedPath, err = filepath.Abs(resolvedPath)
-		if err == nil {
-			basePath, _ := filepath.Abs(originalRepoPath)
-			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
-				config.RepoPath = resolvedPath
-			}
-		}
-	}
-
-	defer func() {
-		config.RepoPath = originalRepoPath
-	}()
-
 	output, err := executeGitCommand("checkout", req.Branch)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

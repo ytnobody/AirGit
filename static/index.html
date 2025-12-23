@@ -233,12 +233,7 @@
 
         async function checkoutBranch(branch) {
             try {
-                const repoPath = getCurrentRepositoryPath();
-                const url = new URL('/api/checkout', window.location.origin);
-                if (repoPath) {
-                    url.searchParams.append('repoPath', repoPath);
-                }
-                const response = await fetch(url.toString(), {
+                const response = await fetch('/api/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
