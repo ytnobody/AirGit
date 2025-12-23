@@ -1299,7 +1299,7 @@ func handleAddRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := executeGitCommand("remote", "add", req.Name, req.URL)
+	_, err := executeGitCommand("remote", "add", req.Name, req.URL)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(Response{
@@ -1369,7 +1369,7 @@ func handleUpdateRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := executeGitCommand("remote", "set-url", req.Name, req.URL)
+	_, err := executeGitCommand("remote", "set-url", req.Name, req.URL)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(Response{
@@ -1438,7 +1438,7 @@ func handleRemoveRemote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := executeGitCommand("remote", "remove", req.Name)
+	_, err := executeGitCommand("remote", "remove", req.Name)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(Response{
