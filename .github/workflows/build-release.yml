@@ -57,7 +57,12 @@ jobs:
       - name: Build
         run: |
           mkdir -p build
-          go build -v -o build/${{ matrix.output }} .
+          if [[ "${{ matrix.output }}" == "airgit.exe" ]]; then
+            NAMED_OUTPUT="airgit-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+          else
+            NAMED_OUTPUT="airgit-${{ matrix.goos }}-${{ matrix.goarch }}"
+          fi
+          go build -v -o "build/${NAMED_OUTPUT}" .
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -66,7 +71,9 @@ jobs:
       - name: Calculate checksums
         run: |
           cd build
-          sha256sum ${{ matrix.output }} > ${{ matrix.output }}.sha256
+          for file in airgit*; do
+            sha256sum "$file" > "$file.sha256"
+          done
         shell: bash
 
       - name: Upload artifacts
