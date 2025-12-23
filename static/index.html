@@ -427,15 +427,15 @@
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
                     console.log('PUSH: success message should be visible now');
-                    // Always show log, even if empty
                     showLog(data.log || ['Push completed']);
                     loadStatus();
                 } else {
+                    console.log('PUSH: response failed with status', response.status, 'data:', data);
+                    loadingSpinner.classList.add('hidden');
+                    successMessage.classList.remove('hidden');
                     showError(data.error || 'Push failed');
-                    if (data.log) {
-                        showLog(data.log);
-                    }
-                    resetUI();
+                    showLog(data.log || []);
+                    loadStatus();
                 }
             } catch (error) {
                 console.error('Push error:', error);
