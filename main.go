@@ -36,6 +36,7 @@ type Response struct {
 	Log      []string    `json:"log,omitempty"`
 	Commit   string      `json:"commit,omitempty"`
 	Branches []string    `json:"branches,omitempty"`
+	Tags     []string    `json:"tags,omitempty"`
 	Remotes  []string    `json:"remotes,omitempty"`
 	Ahead    int         `json:"ahead,omitempty"`
 	Behind   int         `json:"behind,omitempty"`
@@ -150,6 +151,9 @@ func main() {
 	http.HandleFunc("/api/remote/add", handleAddRemote)
 	http.HandleFunc("/api/remote/update", handleUpdateRemote)
 	http.HandleFunc("/api/remote/remove", handleRemoveRemote)
+	http.HandleFunc("/api/tags", handleListTags)
+	http.HandleFunc("/api/tag/create", handleCreateTag)
+	http.HandleFunc("/api/tag/push", handlePushTag)
 	http.HandleFunc("/api/systemd/register", handleSystemdRegister)
 	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
@@ -1827,4 +1831,213 @@ func parseCommits(output string) []CommitInfo {
 	}
 
 	return commits
+}
+
+func handleListTags(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	output, err := executeGitCommand("tag", "-l")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to list tags: %v", err),
+		})
+		return
+	}
+
+	var tags []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			tags = append(tags, line)
+		}
+	}
+
+	json.NewEncoder(w).Encode(Response{
+		Tags: tags,
+	})
+}
+
+func handleCreateTag(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		TagName string `json:"tagName"`
+		Message string `json:"message"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	if req.TagName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Tag name is required",
+		})
+		return
+	}
+
+	var logs []string
+	var args []string
+	var output string
+	var err error
+
+	if req.Message != "" {
+		args = []string{"tag", "-a", req.TagName, "-m", req.Message}
+		logs = append(logs, fmt.Sprintf("$ git tag -a %s -m \"%s\"", req.TagName, req.Message))
+	} else {
+		args = []string{"tag", req.TagName}
+		logs = append(logs, fmt.Sprintf("$ git tag %s", req.TagName))
+	}
+
+	output, err = executeGitCommand(args...)
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		resp := Response{
+			Error: fmt.Sprintf("Failed to create tag: %v", err),
+			Log:   logs,
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	logs = append(logs, fmt.Sprintf("✓ Tag '%s' created!", req.TagName))
+
+	json.NewEncoder(w).Encode(Response{
+		Commit: req.TagName,
+		Log:    logs,
+	})
+}
+
+func handlePushTag(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	remote := r.URL.Query().Get("remote")
+	if remote == "" {
+		remote = "origin"
+	}
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var req struct {
+		TagName string `json:"tagName"`
+		All     bool   `json:"all"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	var logs []string
+	var output string
+	var err error
+
+	if req.All {
+		output, err = executeGitCommand("push", remote, "--tags")
+		logs = append(logs, fmt.Sprintf("$ git push %s --tags", remote))
+	} else {
+		if req.TagName == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(Response{
+				Error: "Tag name is required",
+			})
+			return
+		}
+		output, err = executeGitCommand("push", remote, req.TagName)
+		logs = append(logs, fmt.Sprintf("$ git push %s %s", remote, req.TagName))
+	}
+
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		if strings.Contains(output, "up to date") || strings.Contains(output, "up-to-date") {
+			logs = append(logs, "✓ Everything is already up to date!")
+		} else {
+			resp := Response{
+				Error: fmt.Sprintf("git push failed: %v", err),
+				Log:   logs,
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+	} else {
+		logs = append(logs, "✓ Push successful!")
+	}
+
+	json.NewEncoder(w).Encode(Response{
+		Log: logs,
+	})
 }

@@ -9,6 +9,7 @@ A lightweight web-based GUI for managing Git repositories directly from your bro
 - 📱 Mobile-optimized interface with single-tap operations
 - 📚 Multiple repository management (local filesystem)
 - 🌿 Full branch management (list, create, checkout, delete)
+- 🏷️ Git tag management (list, create, push)
 - 🔄 Git operations (push, pull, status)
 - 🌐 Remote management (add, update, remove, select)
 - 💾 Repository initialization and creation
@@ -413,6 +414,67 @@ Request Body:
 ```json
 {
   "name": "upstream"
+}
+```
+
+### GET /api/tags
+List all tags in the repository.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Response:
+```json
+{
+  "tags": ["v1.0.0", "v1.0.1", "v1.1.0"]
+}
+```
+
+### POST /api/tag/create
+Create a new tag.
+
+Request Body:
+```json
+{
+  "tagName": "v1.0.0",
+  "message": "Release version 1.0.0"
+}
+```
+
+Response:
+```json
+{
+  "commit": "v1.0.0",
+  "log": ["$ git tag -a v1.0.0 -m \"Release version 1.0.0\"", "✓ Tag 'v1.0.0' created!"]
+}
+```
+
+### POST /api/tag/push
+Push tag(s) to a remote repository.
+
+Query Parameters:
+- `remote` (optional): Remote name to push to (default: `origin`)
+- `repoPath` (optional): Relative path to the repository
+
+Request Body:
+```json
+{
+  "tagName": "v1.0.0",
+  "all": false
+}
+```
+
+Or to push all tags:
+```json
+{
+  "all": true
+}
+```
+
+Response:
+```json
+{
+  "log": ["$ git push origin v1.0.0", "✓ Push successful!"]
 }
 ```
 

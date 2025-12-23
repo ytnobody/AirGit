@@ -72,6 +72,10 @@
                     <i class="fas fa-cloud text-lg"></i>
                     <span class="text-xs font-medium">Remotes</span>
                 </button>
+                <button id="tags-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
+                    <i class="fas fa-tags text-lg"></i>
+                    <span class="text-xs font-medium">Tags</span>
+                </button>
                 <button id="commits-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-clock text-lg"></i>
                     <span class="text-xs font-medium">Log</span>
@@ -307,6 +311,64 @@
             </div>
         </div>
 
+        <!-- Tags Management Modal -->
+        <div id="tags-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Tags</h2>
+                <div id="tags-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-600 text-sm">Loading...</div>
+                </div>
+                <button id="create-tag-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ Create Tag</button>
+                <button id="tags-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
+            </div>
+        </div>
+
+        <!-- Create Tag Modal -->
+        <div id="create-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Create New Tag</h2>
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Tag Name</label>
+                        <input id="create-tag-name" type="text" placeholder="v1.0.0" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Message (Optional)</label>
+                        <input id="create-tag-message" type="text" placeholder="Release version 1.0.0" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                        <div class="text-xs text-gray-500 mt-1">Creates annotated tag if provided</div>
+                    </div>
+                </div>
+                <div id="create-tag-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="create-tag-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-tag-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Push Tag Modal -->
+        <div id="push-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Push Tag</h2>
+                <div class="space-y-4 mb-6">
+                    <div id="push-tag-info" class="text-sm text-gray-600">
+                        <!-- Will be filled by JavaScript -->
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Remote</label>
+                        <select id="push-tag-remote" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 text-sm focus:outline-none focus:border-sky-400">
+                            <option value="origin">origin</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="push-tag-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="push-tag-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Push</button>
+                    <button id="push-tag-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Commits Modal -->
         <div id="commits-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
@@ -388,7 +450,25 @@
         const commitsModal = document.getElementById('commits-modal');
         const commitsList = document.getElementById('commits-list');
         const commitsModalCloseBtn = document.getElementById('commits-modal-close-btn');
+        const tagsBtn = document.getElementById('tags-btn');
+        const tagsModal = document.getElementById('tags-modal');
+        const tagsList = document.getElementById('tags-list');
+        const tagsModalCloseBtn = document.getElementById('tags-modal-close-btn');
+        const createTagBtn = document.getElementById('create-tag-btn');
+        const createTagModal = document.getElementById('create-tag-modal');
+        const createTagNameInput = document.getElementById('create-tag-name');
+        const createTagMessageInput = document.getElementById('create-tag-message');
+        const createTagSubmitBtn = document.getElementById('create-tag-submit');
+        const createTagCloseBtn = document.getElementById('create-tag-close-btn');
+        const createTagError = document.getElementById('create-tag-error');
+        const pushTagModal = document.getElementById('push-tag-modal');
+        const pushTagInfo = document.getElementById('push-tag-info');
+        const pushTagRemote = document.getElementById('push-tag-remote');
+        const pushTagSubmitBtn = document.getElementById('push-tag-submit');
+        const pushTagCloseBtn = document.getElementById('push-tag-close-btn');
+        const pushTagError = document.getElementById('push-tag-error');
         let currentEditingRemote = null;
+        let selectedTagForPush = null;
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -745,6 +825,53 @@
             }
         });
 
+        // Tags event listeners
+        tagsBtn.addEventListener('click', async () => {
+            tagsModal.classList.remove('hidden');
+            loadTags();
+        });
+
+        tagsModalCloseBtn.addEventListener('click', () => {
+            tagsModal.classList.add('hidden');
+        });
+
+        tagsModal.addEventListener('click', (e) => {
+            if (e.target === tagsModal) {
+                tagsModal.classList.add('hidden');
+            }
+        });
+
+        createTagBtn.addEventListener('click', () => {
+            createTagModal.classList.remove('hidden');
+            createTagError.classList.add('hidden');
+            createTagNameInput.value = '';
+            createTagMessageInput.value = '';
+        });
+
+        createTagCloseBtn.addEventListener('click', () => {
+            createTagModal.classList.add('hidden');
+        });
+
+        createTagModal.addEventListener('click', (e) => {
+            if (e.target === createTagModal) {
+                createTagModal.classList.add('hidden');
+            }
+        });
+
+        createTagSubmitBtn.addEventListener('click', createTag);
+
+        pushTagCloseBtn.addEventListener('click', () => {
+            pushTagModal.classList.add('hidden');
+        });
+
+        pushTagModal.addEventListener('click', (e) => {
+            if (e.target === pushTagModal) {
+                pushTagModal.classList.add('hidden');
+            }
+        });
+
+        pushTagSubmitBtn.addEventListener('click', pushTag);
+
         createBranchSubmitBtn.addEventListener('click', createBranch);
 
         remoteFormCloseBtn.addEventListener('click', () => {
@@ -855,6 +982,154 @@
                     <div class="text-xs text-gray-500">${escapeHtml(commit.date)}</div>
                 </div>
             `).join('');
+        }
+
+        async function loadTags() {
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/tags', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (response.ok && data.tags) {
+                    displayTags(data.tags);
+                } else if (data.error) {
+                    tagsList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
+                } else {
+                    tagsList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load tags</div>`;
+                }
+            } catch (error) {
+                console.error('Tags load error:', error);
+                tagsList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function displayTags(tags) {
+            if (tags.length === 0) {
+                tagsList.innerHTML = '<div class="text-center text-gray-600 text-sm">No tags found</div>';
+                return;
+            }
+
+            tagsList.innerHTML = tags.map(tag => `
+                <button class="w-full text-left bg-sky-100 hover:bg-sky-200 px-4 py-3 rounded text-gray-700 text-sm transition-colors"
+                        onclick="openPushTagModal('${escapeHtml(tag)}')">
+                    <div class="flex justify-between items-center">
+                        <div class="font-semibold text-sky-600">${escapeHtml(tag)}</div>
+                        <i class="fas fa-cloud-arrow-up text-gray-600"></i>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        async function createTag() {
+            const tagName = createTagNameInput.value.trim();
+            const message = createTagMessageInput.value.trim();
+
+            if (!tagName) {
+                createTagError.textContent = 'Tag name is required';
+                createTagError.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                createTagSubmitBtn.disabled = true;
+                const response = await fetch('/api/tag/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tagName: tagName,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    createTagModal.classList.add('hidden');
+                    showNotification(`✓ Tag '${escapeHtml(tagName)}' created successfully!`);
+                    loadTags();
+                } else {
+                    createTagError.textContent = data.error || 'Failed to create tag';
+                    createTagError.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Create tag error:', error);
+                createTagError.textContent = `Error: ${error.message}`;
+                createTagError.classList.remove('hidden');
+            } finally {
+                createTagSubmitBtn.disabled = false;
+            }
+        }
+
+        function openPushTagModal(tagName) {
+            selectedTagForPush = tagName;
+            pushTagInfo.innerHTML = `Push tag: <strong>${escapeHtml(tagName)}</strong>`;
+            pushTagError.classList.add('hidden');
+            pushTagModal.classList.remove('hidden');
+            loadRemotesForTag();
+        }
+
+        async function loadRemotesForTag() {
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/remotes', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (response.ok && data.remotes) {
+                    pushTagRemote.innerHTML = data.remotes.map(remote => 
+                        `<option value="${escapeHtml(remote.name)}">${escapeHtml(remote.name)}</option>`
+                    ).join('');
+                }
+            } catch (error) {
+                console.error('Load remotes error:', error);
+            }
+        }
+
+        async function pushTag() {
+            if (!selectedTagForPush) {
+                pushTagError.textContent = 'No tag selected';
+                pushTagError.classList.remove('hidden');
+                return;
+            }
+
+            const remote = pushTagRemote.value;
+
+            try {
+                pushTagSubmitBtn.disabled = true;
+                const url = new URL('/api/tag/push', window.location.origin);
+                url.searchParams.append('remote', remote);
+                
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tagName: selectedTagForPush,
+                        all: false
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    pushTagModal.classList.add('hidden');
+                    showNotification(`✓ Tag pushed successfully!`);
+                    loadTags();
+                } else {
+                    pushTagError.textContent = data.error || 'Failed to push tag';
+                    pushTagError.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Push tag error:', error);
+                pushTagError.textContent = `Error: ${error.message}`;
+                pushTagError.classList.remove('hidden');
+            } finally {
+                pushTagSubmitBtn.disabled = false;
+            }
         }
 
         async function loadRemotes() {
