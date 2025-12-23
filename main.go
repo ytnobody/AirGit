@@ -359,6 +359,7 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": branch,
+		"server": "ok",
 	})
 }
 
@@ -458,6 +459,10 @@ func listRepositories(basePath string) ([]Repository, error) {
 
 	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			return nil
+		}
+
+		if info == nil {
 			return nil
 		}
 
