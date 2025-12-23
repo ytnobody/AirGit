@@ -156,6 +156,11 @@ curl -X POST http://localhost:8080/api/systemd/service-start
 
 ### サービスファイル内容
 生成されるサービスファイル（`airgit.service`）の内容：
+
+**自動機能:**
+- 現在のプロセスに渡されているコマンドライン引数を自動的に引き継ぐ
+- AIRGIT_*, SSH_*, GIT_* で始まる環境変数を自動的に含める
+
 ```ini
 [Unit]
 Description=AirGit - Lightweight web-based Git GUI
@@ -164,15 +169,26 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/path/to/airgit
+ExecStart=/path/to/airgit [command-line arguments]
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+Environment="VARIABLE=value"
 
 [Install]
 WantedBy=default.target
 ```
+
+**例：** `./airgit --listen-port 9000 --listen-addr 0.0.0.0` で登録した場合：
+```ini
+ExecStart=/path/to/airgit --listen-port 9000 --listen-addr 0.0.0.0
+```
+
+**環境変数の自動取り込み:**
+- `AIRGIT_*` - AirGit設定変数
+- `SSH_*` - SSH設定変数
+- `GIT_*` - Git設定変数
 
 ### 使用方法
 1. AirGit サーバーが起動している状態で、`POST /api/systemd/register` にリクエストを送信

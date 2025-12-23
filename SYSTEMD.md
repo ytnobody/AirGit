@@ -97,7 +97,27 @@ When registered, AirGit creates a systemd service file at:
 ~/.config/systemd/user/airgit.service
 ```
 
-The service file contains:
+### Automatic Command-Line Arguments Preservation
+
+The service file automatically captures and includes:
+
+**1. Executable Path**
+The absolute path to the current AirGit binary
+
+**2. Command-Line Arguments**
+Any arguments passed when registering (e.g., `--listen-port 8080`)
+
+**3. Environment Variables**
+Relevant environment variables are automatically included:
+- All `AIRGIT_*` variables (AirGit configuration)
+- All `SSH_*` variables (SSH configuration)
+- All `GIT_*` variables (Git configuration)
+
+### Example Service File
+
+If you run: `./airgit --listen-port 9000` with `AIRGIT_SSH_KEY=/path/to/key`
+
+The generated service file will be:
 ```ini
 [Unit]
 Description=AirGit - Lightweight web-based Git GUI
@@ -106,11 +126,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/absolute/path/to/airgit
+ExecStart=/path/to/airgit --listen-port 9000
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+Environment="AIRGIT_SSH_KEY=/path/to/key"
 
 [Install]
 WantedBy=default.target
@@ -119,10 +140,25 @@ WantedBy=default.target
 ### Configuration Details
 
 - **Type=simple**: AirGit runs as a simple daemon
+- **ExecStart**: Includes full command with arguments
+- **Environment**: Captures AIRGIT_, SSH_, and GIT_ variables
 - **Restart=on-failure**: Service restarts if it fails
 - **RestartSec=5**: Wait 5 seconds before restarting
 - **StandardOutput/StandardError=journal**: Logs go to journald
 - **WantedBy=default.target**: Starts when user logs in
+
+### Supported Environment Variables
+
+The service file automatically captures these prefixes:
+- **AIRGIT_\*** - AirGit configuration variables
+  - AIRGIT_SSH_HOST, AIRGIT_SSH_PORT, AIRGIT_SSH_USER, etc.
+  - AIRGIT_REPO_PATH, AIRGIT_LISTEN_ADDR, AIRGIT_LISTEN_PORT
+  
+- **SSH_\*** - SSH configuration
+  - SSH_AUTH_SOCK, SSH_AGENT_PID, etc.
+  
+- **GIT_\*** - Git configuration
+  - GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, etc.
 
 ## Managing the Service
 

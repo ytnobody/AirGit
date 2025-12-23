@@ -1518,6 +1518,31 @@ func handleSystemdRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create service file content with current process arguments
+	execArgs := os.Args[1:]
+	var cmdLine string
+	if len(execArgs) > 0 {
+		cmdLine = execPath + " " + strings.Join(execArgs, " ")
+	} else {
+		cmdLine = execPath
+	}
+
+	// Get relevant environment variables
+	envVars := []string{}
+	relevantEnvVars := []string{"AIRGIT_", "SSH_", "GIT_"}
+	for _, envVar := range os.Environ() {
+		for _, prefix := range relevantEnvVars {
+			if strings.HasPrefix(envVar, prefix) {
+				envVars = append(envVars, "Environment=\""+envVar+"\"")
+				break
+			}
+		}
+	}
+	environmentSection := ""
+	if len(envVars) > 0 {
+		environmentSection = "\n" + strings.Join(envVars, "\n")
+	}
+
 	// Create service file content
 	serviceContent := fmt.Sprintf(`[Unit]
 Description=AirGit - Lightweight web-based Git GUI
@@ -1530,11 +1555,11 @@ ExecStart=%s
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
-StandardError=journal
+StandardError=journal%s
 
 [Install]
 WantedBy=default.target
-`, execPath)
+`, cmdLine, environmentSection)
 
 	// Write service file
 	servicePath := filepath.Join(serviceDir, "airgit.service")
