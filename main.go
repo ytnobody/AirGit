@@ -105,6 +105,7 @@ func main() {
 	http.HandleFunc("/api/push", handlePush)
 	http.HandleFunc("/api/repos", handleListRepos)
 	http.HandleFunc("/api/select-repo", handleSelectRepo)
+	http.HandleFunc("/api/branch/create", handleCreateBranch)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
 	log.Printf("Starting AirGit on %s", addr)
@@ -354,6 +355,72 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": branch,
+	})
+}
+
+func handleCreateBranch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		BranchName string `json:"branchName"`
+		Checkout   bool   `json:"checkout"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	if req.BranchName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Branch name is required",
+		})
+		return
+	}
+
+	var logs []string
+	var args []string
+
+	if req.Checkout {
+		args = []string{"checkout", "-b", req.BranchName}
+		logs = append(logs, fmt.Sprintf("$ git checkout -b %s", req.BranchName))
+	} else {
+		args = []string{"branch", req.BranchName}
+		logs = append(logs, fmt.Sprintf("$ git branch %s", req.BranchName))
+	}
+
+	output, err := executeGitCommand(args...)
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		resp := Response{
+			Error: fmt.Sprintf("Failed to create branch: %v", err),
+			Log:   logs,
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	if req.Checkout {
+		logs = append(logs, fmt.Sprintf("✓ Branch '%s' created and checked out!", req.BranchName))
+	} else {
+		logs = append(logs, fmt.Sprintf("✓ Branch '%s' created!", req.BranchName))
+	}
+
+	json.NewEncoder(w).Encode(Response{
+		Branch: req.BranchName,
+		Log:    logs,
 	})
 }
 
