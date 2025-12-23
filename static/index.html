@@ -47,6 +47,7 @@
                         <button id="branch-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Branch</button>
                         <button id="remotes-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Remotes</button>
                         <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
+                        <button id="settings-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">⚙️</button>
                     </div>
                 </div>
                 <div class="text-sm text-gray-400 space-y-1">
@@ -203,6 +204,38 @@
                     <button id="remote-form-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Save</button>
                     <button id="remote-form-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Settings</h2>
+                
+                <!-- Systemd Registration Section -->
+                <div class="space-y-4 mb-6">
+                    <div class="border border-gray-700 rounded p-4 bg-gray-900/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-200">Auto-Start with Systemd</h3>
+                                <p class="text-xs text-gray-400 mt-1">Register AirGit to auto-start on login</p>
+                            </div>
+                            <div id="systemd-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
+                                Checking...
+                            </div>
+                        </div>
+                        <div id="systemd-status-message" class="text-xs text-gray-400 mb-3"></div>
+                        <button id="systemd-register-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                            <span id="systemd-btn-text">Register with Systemd</span>
+                            <svg id="systemd-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="settings-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
             </div>
         </div>
     </div>
@@ -977,6 +1010,110 @@
             } catch (error) {
                 showError('Network error: ' + error.message);
                 resetUI();
+            }
+        });
+
+        // Systemd Registration Features
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsModalCloseBtn = document.getElementById('settings-modal-close-btn');
+        const systemdRegisterBtn = document.getElementById('systemd-register-btn');
+        const systemdBtnText = document.getElementById('systemd-btn-text');
+        const systemdSpinner = document.getElementById('systemd-spinner');
+        const systemdStatusBadge = document.getElementById('systemd-status-badge');
+        const systemdStatusMessage = document.getElementById('systemd-status-message');
+
+        // Settings modal event listeners
+        settingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+            loadSystemdStatus();
+        });
+
+        settingsModalCloseBtn.addEventListener('click', () => {
+            settingsModal.classList.add('hidden');
+        });
+
+        // Close settings modal when clicking outside
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.classList.add('hidden');
+            }
+        });
+
+        async function loadSystemdStatus() {
+            try {
+                const response = await fetch('/api/systemd/status');
+                const data = await response.json();
+
+                if (data.registered) {
+                    systemdStatusBadge.textContent = '✓ Registered';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusMessage.textContent = 'AirGit is registered with systemd and will auto-start on login.';
+                    systemdRegisterBtn.disabled = true;
+                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdBtnText.textContent = 'Already Registered';
+                } else {
+                    systemdStatusBadge.textContent = 'Not Registered';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300';
+                    systemdStatusMessage.textContent = 'Click the button below to register AirGit for auto-start.';
+                    systemdRegisterBtn.disabled = false;
+                    systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    systemdBtnText.textContent = 'Register with Systemd';
+                }
+            } catch (error) {
+                console.error('Error checking systemd status:', error);
+                systemdStatusBadge.textContent = 'Error';
+                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                systemdStatusMessage.textContent = 'Could not check registration status.';
+            }
+        }
+
+        systemdRegisterBtn.addEventListener('click', async () => {
+            systemdRegisterBtn.disabled = true;
+            systemdBtnText.classList.add('hidden');
+            systemdSpinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/systemd/register', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Show success
+                    systemdStatusBadge.textContent = '✓ Registered';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusMessage.textContent = '✓ Successfully registered! AirGit will auto-start on your next login.';
+                    systemdRegisterBtn.disabled = true;
+                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdBtnText.textContent = 'Already Registered';
+                    systemdSpinner.classList.add('hidden');
+                } else if (response.status === 409) {
+                    // Already registered
+                    systemdStatusBadge.textContent = '✓ Registered';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusMessage.textContent = 'AirGit is already registered with systemd.';
+                    systemdRegisterBtn.disabled = true;
+                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdBtnText.textContent = 'Already Registered';
+                    systemdSpinner.classList.add('hidden');
+                } else {
+                    // Error
+                    systemdStatusMessage.textContent = '✗ Error: ' + (data.error || 'Failed to register');
+                    systemdStatusBadge.textContent = 'Error';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                    systemdBtnText.classList.remove('hidden');
+                    systemdSpinner.classList.add('hidden');
+                    systemdRegisterBtn.disabled = false;
+                    systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                }
+            } catch (error) {
+                console.error('Error registering with systemd:', error);
+                systemdStatusMessage.textContent = '✗ Network error: ' + error.message;
+                systemdStatusBadge.textContent = 'Error';
+                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                systemdBtnText.classList.remove('hidden');
+                systemdSpinner.classList.add('hidden');
+                systemdRegisterBtn.disabled = false;
+                systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
         });
 

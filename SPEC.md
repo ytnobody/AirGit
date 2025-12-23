@@ -50,6 +50,89 @@
 * 指でタップしやすいボタンサイズ（44px以上）。
 * 背景は目に優しいダークモード対応。
 
+## 6. Systemd ユーザーモードサービス登録機能
+
+### 概要
+AirGit をユーザーモード（user-mode）の systemd サービスとして登録し、自動起動を実現する機能を提供する。
+
+### API エンドポイント
+
+#### 1. **Systemd Status API (`GET /api/systemd/status`)**
+現在のサービス登録状態を確認する。
+
+**レスポンス例:**
+```json
+{
+  "registered": true
+}
+```
+
+#### 2. **Systemd Register API (`POST /api/systemd/register`)**
+AirGit をユーザーモード systemd サービスとして登録する。
+
+**機能:**
+- `~/.config/systemd/user/airgit.service` ファイルを作成
+- 現在の実行可能ファイルのパスを自動取得
+- systemd デーモンをリロード
+- サービスを enable して自動起動を有効化
+
+**レスポンス成功例:**
+```json
+{
+  "success": true,
+  "message": "Service registered and enabled successfully",
+  "path": "/home/user/.config/systemd/user/airgit.service"
+}
+```
+
+**レスポンスエラー例（既に登録済み）:**
+```json
+{
+  "success": false,
+  "error": "Service is already registered with systemd"
+}
+```
+
+### サービスファイル内容
+生成されるサービスファイル（`airgit.service`）の内容：
+```ini
+[Unit]
+Description=AirGit - Lightweight web-based Git GUI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/path/to/airgit
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+```
+
+### 使用方法
+1. AirGit サーバーが起動している状態で、`POST /api/systemd/register` にリクエストを送信
+2. 既に登録されている場合は、409 Conflict エラーが返される
+3. 登録成功後、ユーザーのログイン時に AirGit は自動起動
+
+### サービス管理コマンド
+```bash
+# 登録状態確認
+curl http://localhost:8080/api/systemd/status
+
+# サービス登録
+curl -X POST http://localhost:8080/api/systemd/register
+
+# 登録後、systemctl で管理
+systemctl --user status airgit
+systemctl --user start airgit
+systemctl --user stop airgit
+systemctl --user restart airgit
+```
+
 ---
 
 ## AI（Cursor/Claude等）への指示用プロンプト

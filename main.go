@@ -125,6 +125,8 @@ func main() {
 	http.HandleFunc("/api/remote/add", handleAddRemote)
 	http.HandleFunc("/api/remote/update", handleUpdateRemote)
 	http.HandleFunc("/api/remote/remove", handleRemoveRemote)
+	http.HandleFunc("/api/systemd/register", handleSystemdRegister)
+	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -1451,4 +1453,134 @@ func handleRemoveRemote(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": fmt.Sprintf("Remote '%s' removed successfully", req.Name),
 	})
+}
+
+func handleSystemdStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	registered := isSystemdServiceRegistered()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"registered": registered,
+	})
+}
+
+func handleSystemdRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if already registered
+	if isSystemdServiceRegistered() {
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Service is already registered with systemd",
+		})
+		return
+	}
+
+	// Get the current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get executable path: %v", err),
+		})
+		return
+	}
+
+	// Get home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get home directory: %v", err),
+		})
+		return
+	}
+
+	// Create systemd service directory
+	serviceDir := filepath.Join(homeDir, ".config", "systemd", "user")
+	if err := os.MkdirAll(serviceDir, 0755); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to create systemd directory: %v", err),
+		})
+		return
+	}
+
+	// Create service file content
+	serviceContent := fmt.Sprintf(`[Unit]
+Description=AirGit - Lightweight web-based Git GUI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%s
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+`, execPath)
+
+	// Write service file
+	servicePath := filepath.Join(serviceDir, "airgit.service")
+	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to write service file: %v", err),
+		})
+		return
+	}
+
+	// Reload systemd daemon
+	cmd := exec.Command("systemctl", "--user", "daemon-reload")
+	if err := cmd.Run(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to reload systemd daemon: %v", err),
+		})
+		return
+	}
+
+	// Enable service
+	cmd = exec.Command("systemctl", "--user", "enable", "airgit.service")
+	if err := cmd.Run(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to enable service: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Service registered and enabled successfully",
+		"path":    servicePath,
+	})
+}
+
+func isSystemdServiceRegistered() bool {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+
+	servicePath := filepath.Join(homeDir, ".config", "systemd", "user", "airgit.service")
+	_, err = os.Stat(servicePath)
+	return err == nil
 }
