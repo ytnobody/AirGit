@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const version = "1.0.0"
@@ -1599,6 +1600,21 @@ WantedBy=default.target
 		"message": "Service registered and enabled successfully",
 		"path":    servicePath,
 	})
+
+	// Start the service via systemd
+	go func() {
+		// Wait a moment for the response to be sent before exiting
+		time.Sleep(500 * time.Millisecond)
+
+		// Start the service
+		startCmd := exec.Command("systemctl", "--user", "start", "airgit.service")
+		if err := startCmd.Run(); err != nil {
+			log.Printf("Failed to start service after registration: %v", err)
+		}
+
+		// Exit the current process
+		os.Exit(0)
+	}()
 }
 
 func isSystemdServiceRegistered() bool {
