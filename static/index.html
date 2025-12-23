@@ -234,12 +234,15 @@
         async function checkoutBranch(branch) {
             try {
                 const repoPath = getCurrentRepositoryPath();
-                const response = await fetch('/api/checkout', {
+                const url = new URL('/api/checkout', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString(), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        branch: branch,
-                        repoPath: repoPath
+                        branch: branch
                     })
                 });
                 const data = await response.json();

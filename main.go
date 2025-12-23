@@ -672,8 +672,7 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req struct {
-		Branch   string `json:"branch"`
-		RepoPath string `json:"repoPath"`
+		Branch string `json:"branch"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -692,16 +691,18 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repoPath := r.URL.Query().Get("repoPath")
+	
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
-	if req.RepoPath != "" {
+	if repoPath != "" {
 		// Resolve and validate the path
 		var resolvedPath string
 		var err error
-		if filepath.IsAbs(req.RepoPath) {
-			resolvedPath = req.RepoPath
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
 		} else {
-			resolvedPath = filepath.Join(originalRepoPath, req.RepoPath)
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
 		}
 		resolvedPath, err = filepath.Abs(resolvedPath)
 		if err == nil {
