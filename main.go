@@ -203,8 +203,14 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
 		// Resolve and validate the path
-		resolvedPath := filepath.Join(originalRepoPath, repoPath)
-		resolvedPath, err := filepath.Abs(resolvedPath)
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
 		if err == nil {
 			basePath, _ := filepath.Abs(originalRepoPath)
 			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
@@ -250,8 +256,14 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
 		// Resolve and validate the path
-		resolvedPath := filepath.Join(originalRepoPath, repoPath)
-		resolvedPath, err := filepath.Abs(resolvedPath)
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
 		if err == nil {
 			basePath, _ := filepath.Abs(originalRepoPath)
 			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
@@ -598,8 +610,14 @@ func handleListBranches(w http.ResponseWriter, r *http.Request) {
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
 		// Resolve and validate the path
-		resolvedPath := filepath.Join(originalRepoPath, repoPath)
-		resolvedPath, err := filepath.Abs(resolvedPath)
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
 		if err == nil {
 			basePath, _ := filepath.Abs(originalRepoPath)
 			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
@@ -678,8 +696,14 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	originalRepoPath := config.RepoPath
 	if req.RepoPath != "" {
 		// Resolve and validate the path
-		resolvedPath := filepath.Join(originalRepoPath, req.RepoPath)
-		resolvedPath, err := filepath.Abs(resolvedPath)
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(req.RepoPath) {
+			resolvedPath = req.RepoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, req.RepoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
 		if err == nil {
 			basePath, _ := filepath.Abs(originalRepoPath)
 			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
