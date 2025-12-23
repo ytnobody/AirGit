@@ -50,7 +50,6 @@
                 </div>
                 <div class="text-sm text-gray-400 space-y-1">
                     <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
-                    <div>Server: <span id="server-info" class="font-mono text-gray-200">Loading...</span></div>
                 </div>
             </div>
         </header>
@@ -129,7 +128,6 @@
         const logContainer = document.getElementById('log-container');
         const logOutput = document.getElementById('log-output');
         const branchName = document.getElementById('branch-name');
-        const serverInfo = document.getElementById('server-info');
         const branchSelectorBtn = document.getElementById('branch-selector-btn');
         const branchModal = document.getElementById('branch-modal');
         const branchesList = document.getElementById('branches-list');
@@ -145,14 +143,11 @@
                 const data = await response.json();
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
-                    serverInfo.textContent = data.server || 'unknown';
                 } else {
                     branchName.textContent = 'Error';
-                    serverInfo.textContent = data.error || 'Unknown error';
                 }
             } catch (error) {
                 branchName.textContent = 'Error';
-                serverInfo.textContent = 'Connection failed';
             }
         }
 
@@ -176,10 +171,8 @@
 
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
-                    serverInfo.textContent = data.server || 'unknown';
                 } else {
                     branchName.textContent = 'Error';
-                    serverInfo.textContent = data.error || 'Unknown error';
                     console.error('Init error:', data);
                 }
             } catch (error) {
@@ -276,7 +269,6 @@
 
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
-                    serverInfo.textContent = data.server || 'unknown';
                     repoModal.classList.add('hidden');
                 } else {
                     alert(`Error selecting repository: ${data.error || 'Unknown error'}`);

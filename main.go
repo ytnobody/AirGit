@@ -28,7 +28,6 @@ type Config struct {
 
 type Response struct {
 	Branch  string      `json:"branch,omitempty"`
-	Server  string      `json:"server,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Log     []string    `json:"log,omitempty"`
 	Commit  string      `json:"commit,omitempty"`
@@ -359,7 +358,6 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": branch,
-		"server": "ok",
 	})
 }
 
