@@ -24,7 +24,7 @@ make build
 # http://localhost:8080
 ```
 
-### Option 2: Manual Configuration
+### Option 2: Manual Configuration with Environment Variables
 
 ```bash
 # 1. Set environment variables (in your shell or .env file)
@@ -44,12 +44,49 @@ make build
 # http://localhost:8080
 ```
 
+### Option 3: Using Command-Line Flags
+
+```bash
+# 1. Build the binary
+make build
+
+# 2. Run with command-line flags
+./airgit --ssh-host your-server.com --ssh-user git --repo-path /var/git/my-repo
+
+# 3. Open in browser or mobile
+# http://localhost:8080
+```
+
+## Help and Version
+
+Show all available command-line options:
+
+```bash
+./airgit --help
+# or
+./airgit -h
+```
+
+Check the version:
+
+```bash
+./airgit --version
+# or
+./airgit -v
+```
+
 ## Using With Different SSH Keys
 
 ```bash
 # Use a specific SSH key (e.g., deploy key)
 export AIRGIT_SSH_KEY=/path/to/deploy-key
 ./airgit
+```
+
+Or with flags:
+
+```bash
+./airgit --ssh-key /path/to/deploy-key
 ```
 
 ## Testing the API

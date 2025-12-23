@@ -67,7 +67,15 @@
 - [x] `.env.example` file included
 - [x] `setup.sh` interactive setup script
 
-### 7. Code Quality ✓
+### 7. Command-Line Help Support ✓
+- [x] `-h`, `--help` flags to display help message
+- [x] `-v`, `--version` flags to display version information
+- [x] All configuration options available as command-line flags
+- [x] Command-line flags override environment variables
+- [x] Comprehensive help text with examples
+- [x] Version constant (1.0.0)
+
+### 8. Code Quality ✓
 - [x] Proper error handling
 - [x] Shell command injection protection (quoting)
 - [x] SSH session management

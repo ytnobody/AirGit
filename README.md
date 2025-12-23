@@ -28,7 +28,7 @@ A lightweight web-based GUI tool for pushing Git changes from mobile devices via
 go build -o airgit
 ```
 
-3. Set up environment variables:
+3. Set up environment variables or use command-line flags:
 
 ```bash
 export AIRGIT_SSH_HOST=your-server.com
@@ -45,6 +45,24 @@ export AIRGIT_REPO_PATH=/var/git/my-repo
 
 5. Open http://localhost:8080 in your browser
 
+### Displaying Help
+
+To see all available options, use:
+
+```bash
+./airgit --help
+# or
+./airgit -h
+```
+
+To check the version:
+
+```bash
+./airgit --version
+# or
+./airgit -v
+```
+
 ## Configuration
 
 Configure via environment variables:
@@ -58,6 +76,28 @@ Configure via environment variables:
 | `AIRGIT_REPO_PATH` | `/var/git/repo` | Absolute path to Git repository on remote server |
 | `AIRGIT_LISTEN_ADDR` | `0.0.0.0` | Server listen address |
 | `AIRGIT_LISTEN_PORT` | `8080` | Server listen port |
+
+### Command-Line Flags
+
+Alternatively, use command-line flags (which override environment variables):
+
+| Flag | Description |
+|------|-------------|
+| `-h`, `--help` | Show help message |
+| `-v`, `--version` | Show version information |
+| `--ssh-host <host>` | SSH server hostname |
+| `--ssh-port <port>` | SSH server port |
+| `--ssh-user <user>` | SSH username |
+| `--ssh-key <path>` | Path to SSH private key |
+| `--repo-path <path>` | Absolute path to Git repository on remote server |
+| `--listen-addr <addr>` | Server listen address |
+| `--listen-port <port>` | Server listen port |
+
+Example using flags:
+
+```bash
+./airgit --ssh-host example.com --repo-path /var/git/my-repo --listen-port 9000
+```
 
 ## API Endpoints
 

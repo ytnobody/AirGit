@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +15,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 )
+
+const version = "1.0.0"
 
 //go:embed static/*
 var staticFiles embed.FS
@@ -61,6 +64,63 @@ func getEnv(key, defaultVal string) string {
 }
 
 func main() {
+	var showHelp bool
+	var showVersion bool
+	var sshHost string
+	var sshPort string
+	var sshUser string
+	var sshKey string
+	var repoPath string
+	var listenAddr string
+	var listenPort string
+
+	flag.BoolVar(&showHelp, "help", false, "Show help message")
+	flag.BoolVar(&showHelp, "h", false, "Show help message (shorthand)")
+	flag.BoolVar(&showVersion, "version", false, "Show version")
+	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
+	flag.StringVar(&sshHost, "ssh-host", "", "SSH server hostname (default: localhost)")
+	flag.StringVar(&sshPort, "ssh-port", "", "SSH server port (default: 22)")
+	flag.StringVar(&sshUser, "ssh-user", "", "SSH username (default: git)")
+	flag.StringVar(&sshKey, "ssh-key", "", "Path to SSH private key (default: ~/.ssh/id_rsa)")
+	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository on remote server (default: /var/git/repo)")
+	flag.StringVar(&listenAddr, "listen-addr", "", "Server listen address (default: 0.0.0.0)")
+	flag.StringVar(&listenPort, "listen-port", "", "Server listen port (default: 8080)")
+
+	flag.Parse()
+
+	if showHelp {
+		printHelp()
+		os.Exit(0)
+	}
+
+	if showVersion {
+		fmt.Printf("AirGit version %s\n", version)
+		os.Exit(0)
+	}
+
+	// Override config with command-line flags if provided
+	if sshHost != "" {
+		config.SSHHost = sshHost
+	}
+	if sshPort != "" {
+		config.SSHPort = sshPort
+	}
+	if sshUser != "" {
+		config.SSHUser = sshUser
+	}
+	if sshKey != "" {
+		config.SSHKeyPath = sshKey
+	}
+	if repoPath != "" {
+		config.RepoPath = repoPath
+	}
+	if listenAddr != "" {
+		config.ListenAddr = listenAddr
+	}
+	if listenPort != "" {
+		config.ListenPort = listenPort
+	}
+
 	http.HandleFunc("/", serveStatic)
 	http.HandleFunc("/manifest.json", serveManifest)
 	http.HandleFunc("/service-worker.js", serveServiceWorker)
@@ -72,6 +132,39 @@ func main() {
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func printHelp() {
+	fmt.Printf(`AirGit - Lightweight web-based Git GUI for mobile devices
+
+Usage: airgit [options]
+
+Options:
+  -h, --help                Show this help message
+  -v, --version             Show version information
+  --ssh-host <host>         SSH server hostname (env: AIRGIT_SSH_HOST, default: localhost)
+  --ssh-port <port>         SSH server port (env: AIRGIT_SSH_PORT, default: 22)
+  --ssh-user <user>         SSH username (env: AIRGIT_SSH_USER, default: git)
+  --ssh-key <path>          Path to SSH private key (env: AIRGIT_SSH_KEY, default: ~/.ssh/id_rsa)
+  --repo-path <path>        Absolute path to Git repository on remote server (env: AIRGIT_REPO_PATH, default: /var/git/repo)
+  --listen-addr <addr>      Server listen address (env: AIRGIT_LISTEN_ADDR, default: 0.0.0.0)
+  --listen-port <port>      Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
+
+Examples:
+  # Using environment variables
+  export AIRGIT_SSH_HOST=example.com
+  export AIRGIT_REPO_PATH=/var/git/my-repo
+  airgit
+
+  # Using command-line flags
+  airgit --ssh-host example.com --repo-path /var/git/my-repo
+
+  # Show help and version
+  airgit --help
+  airgit --version
+
+For more information, visit: https://github.com/your-repo/AirGit
+`)
 }
 
 func serveStatic(w http.ResponseWriter, r *http.Request) {
