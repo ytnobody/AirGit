@@ -1438,7 +1438,17 @@
             console.log('Showing READY state');
             pwaStatusBadge.textContent = '✓ Ready';
             pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
-            pwaStatusMessage.textContent = 'Install AirGit as an app for quick access from your home screen.';
+            
+            const isSecure = window.location.protocol === 'https:' || 
+                           window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
+            
+            if (isSecure) {
+                pwaStatusMessage.textContent = 'Install AirGit as an app for quick access from your home screen.';
+            } else {
+                pwaStatusMessage.textContent = 'Click "Install App" to add AirGit to your home screen. Works on all browsers!';
+            }
+            
             pwaInstallBtn.disabled = false;
             pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             pwaBtnText.textContent = 'Install App';
@@ -1499,7 +1509,7 @@
                 return;
             }
 
-            // beforeinstallprompt not available yet - provide helpful message
+            // beforeinstallprompt not available yet - try HTTP fallback
             pwaStatusMessage.textContent = '⏳ Preparing installation... Please try again in a moment.';
             console.log('beforeinstallprompt not yet available, waiting...');
             
@@ -1509,12 +1519,63 @@
                     console.log('beforeinstallprompt now available, retrying...');
                     pwaInstallBtn.click();
                 } else {
-                    pwaStatusMessage.textContent = 'ℹ️ PWA installation requires a secure context (HTTPS). Make sure you\'re using Chrome, Edge, Opera, or Safari on iOS.';
-                    pwaStatusBadge.textContent = 'Check Requirements';
-                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700';
+                    // HTTP environment - use fallback methods
+                    console.log('Using HTTP environment fallback');
+                    showHTTPFallback();
                 }
             }, 1000);
         });
+
+        async function showHTTPFallback() {
+            pwaStatusMessage.textContent = '';
+            pwaStatusBadge.textContent = 'Ready';
+            pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+            
+            try {
+                // Try Web Share API first (most compatible)
+                if (navigator.share) {
+                    console.log('Using Web Share API');
+                    const shareData = {
+                        title: 'AirGit',
+                        text: 'Install AirGit as an app',
+                        url: window.location.href
+                    };
+                    await navigator.share(shareData);
+                    pwaStatusMessage.textContent = '✓ Share dialog opened. Look for "Add to Home Screen" option.';
+                    return;
+                }
+                
+                // Fallback: Copy URL to clipboard
+                if (navigator.clipboard) {
+                    console.log('Using Clipboard API');
+                    await navigator.clipboard.writeText(window.location.href);
+                    pwaStatusMessage.textContent = '✓ App URL copied to clipboard! Open your browser menu and look for "Add to Home Screen".';
+                    pwaStatusBadge.textContent = 'Manual Install';
+                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    return;
+                }
+                
+                // Last resort: Show manual installation steps
+                showManualInstallSteps();
+            } catch (error) {
+                console.error('Error in HTTP fallback:', error);
+                showManualInstallSteps();
+            }
+        }
+
+        function showManualInstallSteps() {
+            console.log('Showing manual install steps');
+            pwaStatusMessage.innerHTML = `
+                <div class="text-xs text-gray-600 space-y-2">
+                    <p><strong>📱 Manual Installation Steps:</strong></p>
+                    <p><strong>Android Chrome:</strong> Tap menu (⋮) → "Install app"</p>
+                    <p><strong>iOS Safari:</strong> Tap Share (↗️) → "Add to Home Screen"</p>
+                    <p><strong>Samsung Internet:</strong> Tap menu (☰) → "Add to Home Screen"</p>
+                </div>
+            `;
+            pwaStatusBadge.textContent = 'Manual Mode';
+            pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700';
+        }
 
         // Initialize on page load and when settings are opened
         window.addEventListener('load', () => {
