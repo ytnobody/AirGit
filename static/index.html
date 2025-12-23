@@ -139,6 +139,7 @@
         const errorMessage = document.getElementById('error-message');
         const logContainer = document.getElementById('log-container');
         const logOutput = document.getElementById('log-output');
+        console.log('Elements loaded:', { pushButton, pullButton, logContainer, logOutput });
         const branchName = document.getElementById('branch-name');
         const branchSelectorBtn = document.getElementById('branch-selector-btn');
         const branchModal = document.getElementById('branch-modal');
@@ -341,7 +342,8 @@
 
         function showLog(lines) {
             try {
-                console.log('showLog called');
+                console.log('showLog called with lines:', lines);
+                logContainer.style.display = 'block';  // Force display
                 logContainer.classList.remove('hidden');
                 logOutput.innerHTML = '';
                 if (Array.isArray(lines)) {
@@ -352,6 +354,7 @@
                     });
                 }
                 logOutput.scrollTop = logOutput.scrollHeight;
+                console.log('showLog completed');
             } catch (error) {
                 console.error('showLog error:', error);
                 logContainer.classList.remove('hidden');
@@ -401,6 +404,7 @@
         });
 
         pushButton.addEventListener('click', async () => {
+            console.log('PUSH button clicked');
             pushButton.disabled = true;
             pullButton.disabled = true;
             buttonText.classList.add('hidden');
@@ -408,6 +412,7 @@
             successMessage.classList.add('hidden');
             errorMessage.classList.add('hidden');
             logContainer.classList.add('hidden');
+            console.log('UI updated for loading');
 
             try {
                 const repoPath = getCurrentRepositoryPath();
@@ -421,8 +426,9 @@
                 if (response.ok) {
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
-                    console.log('Push success, logs:', data.log);
-                    if (data.log && data.log.length > 0) {
+                    console.log('PUSH success, showing logs');
+                    // Always show logs
+                    if (data.log && Array.isArray(data.log) && data.log.length > 0) {
                         showLog(data.log);
                     } else {
                         showLog(['Push completed successfully']);
