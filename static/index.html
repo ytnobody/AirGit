@@ -110,6 +110,7 @@
                 <div id="branches-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
                     <div class="text-center text-gray-400 text-sm">Loading...</div>
                 </div>
+                <button id="create-branch-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Branch</button>
                 <button id="branch-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
             </div>
         </div>
@@ -158,6 +159,28 @@
                 </div>
                 <button id="add-remote-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ Add Remote</button>
                 <button id="remotes-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
+
+        <!-- Create Branch Modal -->
+        <div id="create-branch-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Create New Branch</h2>
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Branch Name</label>
+                        <input id="create-branch-name" type="text" placeholder="feature/new-feature" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div class="flex items-center">
+                        <input id="create-branch-checkout" type="checkbox" class="w-4 h-4 bg-gray-700 border border-gray-600 rounded">
+                        <label for="create-branch-checkout" class="ml-2 text-sm text-gray-300">Switch to new branch</label>
+                    </div>
+                </div>
+                <div id="create-branch-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="create-branch-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-branch-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                </div>
             </div>
         </div>
 
@@ -233,6 +256,13 @@
         const remoteFormSubmitBtn = document.getElementById('remote-form-submit');
         const remoteFormCloseBtn = document.getElementById('remote-form-close-btn');
         const remoteFormError = document.getElementById('remote-form-error');
+        const createBranchBtn = document.getElementById('create-branch-btn');
+        const createBranchModal = document.getElementById('create-branch-modal');
+        const createBranchNameInput = document.getElementById('create-branch-name');
+        const createBranchCheckout = document.getElementById('create-branch-checkout');
+        const createBranchSubmitBtn = document.getElementById('create-branch-submit');
+        const createBranchCloseBtn = document.getElementById('create-branch-close-btn');
+        const createBranchError = document.getElementById('create-branch-error');
         let currentEditingRemote = null;
 
         function getCurrentRepositoryPath() {
@@ -560,6 +590,23 @@
             openAddRemoteForm();
         });
 
+        createBranchBtn.addEventListener('click', () => {
+            branchModal.classList.add('hidden');
+            openCreateBranchForm();
+        });
+
+        createBranchCloseBtn.addEventListener('click', () => {
+            createBranchModal.classList.add('hidden');
+        });
+
+        createBranchModal.addEventListener('click', (e) => {
+            if (e.target === createBranchModal) {
+                createBranchModal.classList.add('hidden');
+            }
+        });
+
+        createBranchSubmitBtn.addEventListener('click', createBranch);
+
         remoteFormCloseBtn.addEventListener('click', () => {
             remoteFormModal.classList.add('hidden');
         });
@@ -673,6 +720,73 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        function openCreateBranchForm() {
+            createBranchNameInput.value = '';
+            createBranchCheckout.checked = true;
+            createBranchError.classList.add('hidden');
+            createBranchSubmitBtn.disabled = false;
+            createBranchSubmitBtn.textContent = 'Create';
+            createBranchModal.classList.remove('hidden');
+            createBranchNameInput.focus();
+        }
+
+        async function createBranch() {
+            const branchName = createBranchNameInput.value.trim();
+            const shouldCheckout = createBranchCheckout.checked;
+
+            if (!branchName) {
+                createBranchError.textContent = 'Branch name is required';
+                createBranchError.classList.remove('hidden');
+                return;
+            }
+
+            createBranchSubmitBtn.disabled = true;
+            createBranchSubmitBtn.textContent = 'Creating...';
+            createBranchError.classList.add('hidden');
+
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/branch/create', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        branchName: branchName,
+                        checkout: shouldCheckout
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    createBranchModal.classList.add('hidden');
+                    createBranchSubmitBtn.disabled = false;
+                    createBranchSubmitBtn.textContent = 'Create';
+                    
+                    // Reload branches and status
+                    branchModal.classList.remove('hidden');
+                    loadBranches();
+                    loadStatus();
+                    
+                    // Show success log
+                    showLog(data.log || ['Branch created successfully']);
+                } else {
+                    createBranchError.textContent = data.error || 'Failed to create branch';
+                    createBranchError.classList.remove('hidden');
+                    createBranchSubmitBtn.disabled = false;
+                    createBranchSubmitBtn.textContent = 'Create';
+                }
+            } catch (error) {
+                createBranchError.textContent = 'Network error: ' + error.message;
+                createBranchError.classList.remove('hidden');
+                createBranchSubmitBtn.disabled = false;
+                createBranchSubmitBtn.textContent = 'Create';
+            }
         }
 
         function openAddRemoteForm() {
