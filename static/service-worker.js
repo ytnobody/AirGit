@@ -13,7 +13,6 @@ self.addEventListener('install', (event) => {
       console.log('Service Worker: Caching app shell');
       return cache.addAll(ASSETS_TO_CACHE).catch((error) => {
         console.error('Service Worker: Cache addAll error:', error);
-        // Continue even if some assets fail to cache
         return Promise.resolve();
       });
     })
@@ -43,12 +42,49 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const url = new URL(event.request.url);
+  
+  // API calls should always go to network
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match('/');
+      })
+    );
+    return;
+  }
+
+  // For static assets, use cache-first strategy with network fallback
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    }).catch(() => {
-      console.log('Service Worker: Falling back to cached home page');
-      return caches.match('/');
+      if (response) {
+        // If cached, fetch fresh version in background
+        fetch(event.request).then((freshResponse) => {
+          if (freshResponse && freshResponse.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, freshResponse);
+            });
+          }
+        }).catch(() => {
+          // Ignore network errors for background refresh
+        });
+        return response;
+      }
+      
+      // Not cached, fetch from network
+      return fetch(event.request).then((response) => {
+        // Cache successful responses
+        if (response && response.status === 200) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return response;
+      }).catch(() => {
+        // Network error, fallback to cache or home
+        return caches.match('/');
+      });
     })
   );
 });
