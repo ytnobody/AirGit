@@ -34,6 +34,8 @@ type Response struct {
 	Commit   string      `json:"commit,omitempty"`
 	Branches []string    `json:"branches,omitempty"`
 	Remotes  []string    `json:"remotes,omitempty"`
+	Ahead    int         `json:"ahead,omitempty"`
+	Behind   int         `json:"behind,omitempty"`
 }
 
 type RemoteInfo struct {
@@ -256,9 +258,14 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Get repository name from the directory name
 	repoName := filepath.Base(config.RepoPath)
 
+	// Get ahead/behind count
+	ahead, behind := getAheadBehind(branch)
+
 	json.NewEncoder(w).Encode(Response{
 		Branch:   branch,
 		RepoName: repoName,
+		Ahead:    ahead,
+		Behind:   behind,
 	})
 }
 
@@ -613,6 +620,33 @@ func executeGitCommand(args ...string) (string, error) {
 	return result, nil
 }
 
+func getAheadBehind(branch string) (int, int) {
+	// Try to get the tracking branch
+	trackingBranch, err := executeGitCommand("rev-parse", "--abbrev-ref", branch+"@{u}")
+	if err != nil || strings.TrimSpace(trackingBranch) == "" {
+		// No tracking branch configured
+		return 0, 0
+	}
+
+	trackingBranch = strings.TrimSpace(trackingBranch)
+
+	// Get ahead/behind count
+	output, err := executeGitCommand("rev-list", "--left-right", "--count", branch+"..."+trackingBranch)
+	if err != nil {
+		return 0, 0
+	}
+
+	parts := strings.Fields(strings.TrimSpace(output))
+	if len(parts) >= 2 {
+		var ahead, behind int
+		fmt.Sscanf(parts[0], "%d", &ahead)
+		fmt.Sscanf(parts[1], "%d", &behind)
+		return ahead, behind
+	}
+
+	return 0, 0
+}
+
 
 func listRepositories(basePath string) ([]Repository, error) {
 	var repos []Repository
@@ -754,8 +788,12 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	branch, _ := executeGitCommand("branch", "--show-current")
 	branch = strings.TrimSpace(branch)
 
+	ahead, behind := getAheadBehind(branch)
+
 	json.NewEncoder(w).Encode(Response{
 		Branch: branch,
+		Ahead:  ahead,
+		Behind: behind,
 		Log:    []string{fmt.Sprintf("Switched to branch: %s", branch)},
 	})
 }
@@ -849,9 +887,14 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 	// Get repository name from the directory name
 	repoName := filepath.Base(config.RepoPath)
 
+	// Get ahead/behind count
+	ahead, behind := getAheadBehind(currentBranch)
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch":   currentBranch,
 		"repoName": repoName,
+		"ahead":    ahead,
+		"behind":   behind,
 	})
 }
 
@@ -902,8 +945,13 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 		currentBranch = branch
 	}
 
+	// Get ahead/behind count
+	ahead, behind := getAheadBehind(currentBranch)
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"branch": currentBranch,
+		"ahead":  ahead,
+		"behind": behind,
 	})
 }
 

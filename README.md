@@ -11,6 +11,7 @@ A lightweight web-based GUI tool for pushing Git changes from mobile devices via
 - 🎨 Dark mode UI optimized for mobile
 - ⚡ Real-time branch and server info display
 - 🌐 Support for multiple remotes (origin, upstream, etc.)
+- 📊 Track ahead/behind commits relative to remote tracking branch
 
 ## Quick Start
 
@@ -183,15 +184,19 @@ curl -X POST http://localhost:8080/api/pull?remote=upstream
 ## API Endpoints
 
 ### GET /api/status
-Returns current branch name and server info.
+Returns current branch name, server info, and tracking information.
 
 Response:
 ```json
 {
   "branch": "main",
-  "server": "git@your-server.com"
+  "repoName": "my-repo",
+  "ahead": 2,
+  "behind": 1
 }
 ```
+
+The `ahead` and `behind` fields indicate how many commits the local branch is ahead of or behind the tracking branch (e.g., `origin/main`). If no tracking branch is configured, both values will be 0.
 
 ### POST /api/push
 Executes: `git add .` → `git commit -m "Updated via AirGit"` → `git push [remote] [branch]`
@@ -220,6 +225,28 @@ Response:
   "log": ["$ git pull...", "..."]
 }
 ```
+
+### POST /api/checkout
+Checkout a branch and return tracking information.
+
+Request Body:
+```json
+{
+  "branch": "feature/my-feature"
+}
+```
+
+Response:
+```json
+{
+  "branch": "feature/my-feature",
+  "ahead": 3,
+  "behind": 0,
+  "log": ["Switched to branch: feature/my-feature"]
+}
+```
+
+The `ahead` and `behind` fields show how many commits the branch is ahead of or behind its tracking branch.
 
 ### GET /api/remotes
 Returns list of remote repositories configured in the Git repository.
