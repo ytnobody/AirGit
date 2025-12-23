@@ -224,6 +224,11 @@
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
                     branchModal.classList.add('hidden');
+                    
+                    // Update URL to reflect the new branch
+                    const url = new URL(window.location);
+                    url.searchParams.set('branch', data.branch);
+                    window.history.pushState({}, '', url);
                 } else {
                     alert(`Error checking out branch: ${data.error || 'Unknown error'}`);
                 }
@@ -276,6 +281,12 @@
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
                     repoModal.classList.add('hidden');
+                    
+                    // Update URL to reflect selected repository and branch
+                    const url = new URL(window.location);
+                    url.searchParams.set('path', path);
+                    url.searchParams.set('branch', data.branch);
+                    window.history.pushState({}, '', url);
                 } else {
                     alert(`Error selecting repository: ${data.error || 'Unknown error'}`);
                 }
