@@ -43,7 +43,10 @@
             <div class="max-w-sm mx-auto">
                 <div class="flex justify-between items-start mb-2">
                     <h1 class="text-xl font-bold text-emerald-400">AirGit</h1>
-                    <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
+                    <div class="flex gap-2">
+                        <button id="branch-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Branch</button>
+                        <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
+                    </div>
                 </div>
                 <div class="text-sm text-gray-400 space-y-1">
                     <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
@@ -89,6 +92,17 @@
             </div>
         </main>
 
+        <!-- Branch Selector Modal -->
+        <div id="branch-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Select Branch</h2>
+                <div id="branches-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                </div>
+                <button id="branch-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
+
         <!-- Repository Selector Modal -->
         <div id="repo-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
@@ -116,6 +130,10 @@
         const logOutput = document.getElementById('log-output');
         const branchName = document.getElementById('branch-name');
         const serverInfo = document.getElementById('server-info');
+        const branchSelectorBtn = document.getElementById('branch-selector-btn');
+        const branchModal = document.getElementById('branch-modal');
+        const branchesList = document.getElementById('branches-list');
+        const branchModalCloseBtn = document.getElementById('branch-modal-close-btn');
         const repoSelectorBtn = document.getElementById('repo-selector-btn');
         const repoModal = document.getElementById('repo-modal');
         const reposList = document.getElementById('repos-list');
@@ -135,6 +153,54 @@
             } catch (error) {
                 branchName.textContent = 'Error';
                 serverInfo.textContent = 'Connection failed';
+            }
+        }
+
+        async function loadBranches() {
+            try {
+                const response = await fetch('/api/branches');
+                const data = await response.json();
+                if (response.ok && data.branches) {
+                    displayBranches(data.branches);
+                } else {
+                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error || 'Failed to load branches'}</div>`;
+                }
+            } catch (error) {
+                branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed</div>`;
+            }
+        }
+
+        function displayBranches(branches) {
+            if (branches.length === 0) {
+                branchesList.innerHTML = '<div class="text-center text-gray-400 text-sm">No branches found</div>';
+                return;
+            }
+
+            branchesList.innerHTML = branches.map(branch => `
+                <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
+                        onclick="checkoutBranch('${escapeHtml(branch)}')">
+                    <div class="font-semibold text-emerald-400">${escapeHtml(branch)}</div>
+                </button>
+            `).join('');
+        }
+
+        async function checkoutBranch(branch) {
+            try {
+                const response = await fetch('/api/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ branch: branch })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    branchName.textContent = data.branch || 'unknown';
+                    branchModal.classList.add('hidden');
+                } else {
+                    alert(`Error checking out branch: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert(`Connection error: ${error.message}`);
             }
         }
 
@@ -214,6 +280,21 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        branchSelectorBtn.addEventListener('click', () => {
+            branchModal.classList.remove('hidden');
+            loadBranches();
+        });
+
+        branchModalCloseBtn.addEventListener('click', () => {
+            branchModal.classList.add('hidden');
+        });
+
+        branchModal.addEventListener('click', (e) => {
+            if (e.target === branchModal) {
+                branchModal.classList.add('hidden');
+            }
+        });
 
         repoSelectorBtn.addEventListener('click', () => {
             repoModal.classList.remove('hidden');

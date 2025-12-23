@@ -27,11 +27,12 @@ type Config struct {
 }
 
 type Response struct {
-	Branch string      `json:"branch,omitempty"`
-	Server string      `json:"server,omitempty"`
-	Error  string      `json:"error,omitempty"`
-	Log    []string    `json:"log,omitempty"`
-	Commit string      `json:"commit,omitempty"`
+	Branch  string      `json:"branch,omitempty"`
+	Server  string      `json:"server,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Log     []string    `json:"log,omitempty"`
+	Commit  string      `json:"commit,omitempty"`
+	Branches []string   `json:"branches,omitempty"`
 }
 
 type Repository struct {
@@ -106,6 +107,8 @@ func main() {
 	http.HandleFunc("/api/repos", handleListRepos)
 	http.HandleFunc("/api/select-repo", handleSelectRepo)
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
+	http.HandleFunc("/api/branches", handleListBranches)
+	http.HandleFunc("/api/checkout", handleCheckoutBranch)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
 	log.Printf("Starting AirGit on %s", addr)
@@ -481,4 +484,79 @@ func listRepositories(basePath string) ([]Repository, error) {
 	}
 
 	return repos, nil
+}
+
+func handleListBranches(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	output, err := executeGitCommand("branch", "-a")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to list branches: %v", err),
+		})
+		return
+	}
+
+	var branches []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		line = strings.TrimPrefix(line, "* ")
+		line = strings.TrimPrefix(line, "remotes/")
+		branches = append(branches, line)
+	}
+
+	json.NewEncoder(w).Encode(Response{
+		Branches: branches,
+	})
+}
+
+func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var req struct {
+		Branch string `json:"branch"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Invalid request body",
+		})
+		return
+	}
+
+	if req.Branch == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Response{
+			Error: "Branch name is required",
+		})
+		return
+	}
+
+	output, err := executeGitCommand("checkout", req.Branch)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to checkout branch: %v", err),
+			Log:   []string{output},
+		})
+		return
+	}
+
+	branch, _ := executeGitCommand("branch", "--show-current")
+	branch = strings.TrimSpace(branch)
+
+	json.NewEncoder(w).Encode(Response{
+		Branch: branch,
+		Log:    []string{fmt.Sprintf("Switched to branch: %s", branch)},
+	})
 }
