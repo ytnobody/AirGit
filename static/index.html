@@ -387,11 +387,13 @@
         });
 
         pushButton.addEventListener('click', async () => {
-            resetUI();
             pushButton.disabled = true;
             pullButton.disabled = true;
             buttonText.classList.add('hidden');
             loadingSpinner.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            logContainer.classList.add('hidden');
 
             try {
                 const repoPath = getCurrentRepositoryPath();
@@ -423,11 +425,13 @@
         });
 
         pullButton.addEventListener('click', async () => {
-            resetUI();
             pushButton.disabled = true;
             pullButton.disabled = true;
             pullButtonText.classList.add('hidden');
             pullLoadingSpinner.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            logContainer.classList.add('hidden');
 
             try {
                 const repoPath = getCurrentRepositoryPath();
