@@ -197,6 +197,26 @@ func serveServiceWorker(w http.ResponseWriter, r *http.Request) {
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		resolvedPath := filepath.Join(originalRepoPath, repoPath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
 	branch, err := executeGitCommand("branch", "--show-current")
 	if err != nil || strings.TrimSpace(branch) == "" {
 		// Fallback: try alternative method to get current branch
@@ -223,6 +243,26 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		resolvedPath := filepath.Join(originalRepoPath, repoPath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
 
 	var logs []string
 
@@ -552,6 +592,26 @@ func listRepositories(basePath string) ([]Repository, error) {
 func handleListBranches(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		resolvedPath := filepath.Join(originalRepoPath, repoPath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
 	log.Printf("handleListBranches: RepoPath=%s", config.RepoPath)
 
 	output, err := executeGitCommand("branch", "-a")
@@ -594,7 +654,8 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req struct {
-		Branch string `json:"branch"`
+		Branch   string `json:"branch"`
+		RepoPath string `json:"repoPath"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -612,6 +673,24 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if req.RepoPath != "" {
+		// Resolve and validate the path
+		resolvedPath := filepath.Join(originalRepoPath, req.RepoPath)
+		resolvedPath, err := filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
 
 	output, err := executeGitCommand("checkout", req.Branch)
 	if err != nil {

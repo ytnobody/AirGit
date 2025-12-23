@@ -137,9 +137,27 @@
         const reposList = document.getElementById('repos-list');
         const modalCloseBtn = document.getElementById('modal-close-btn');
 
+        function getCurrentRepositoryPath() {
+            const pathname = window.location.pathname;
+            if (pathname && pathname !== '/') {
+                return pathname.startsWith('/') ? pathname.substring(1) : pathname;
+            }
+            return null;
+        }
+
+        function getCurrentBranch() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('b');
+        }
+
         async function loadStatus() {
             try {
-                const response = await fetch('/api/status');
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/status', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString());
                 const data = await response.json();
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
@@ -152,26 +170,18 @@
         }
 
         async function initializeFromUrl() {
-            const pathname = window.location.pathname;
-            const params = new URLSearchParams(window.location.search);
-            const branch = params.get('b');
-
-            // Extract relative path from pathname
-            // If pathname is "/" or "/", use current repository, otherwise extract the path
-            let relativePath = null;
-            if (pathname && pathname !== '/') {
-                relativePath = pathname.startsWith('/') ? pathname.substring(1) : pathname;
-            }
+            const repoPath = getCurrentRepositoryPath();
+            const branch = getCurrentBranch();
 
             // If no path and no branch parameter, just load status
-            if (!relativePath && !branch) {
+            if (!repoPath && !branch) {
                 loadStatus();
                 return;
             }
 
             try {
                 const url = new URL('/api/load-repo', window.location.origin);
-                if (relativePath) url.searchParams.append('p', relativePath);
+                if (repoPath) url.searchParams.append('p', repoPath);
                 if (branch) url.searchParams.append('b', branch);
 
                 const response = await fetch(url.toString());
@@ -191,7 +201,12 @@
 
         async function loadBranches() {
             try {
-                const response = await fetch('/api/branches');
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/branches', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString());
                 const data = await response.json();
                 if (response.ok && data.branches) {
                     displayBranches(data.branches);
@@ -222,10 +237,14 @@
 
         async function checkoutBranch(branch) {
             try {
+                const repoPath = getCurrentRepositoryPath();
                 const response = await fetch('/api/checkout', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ branch: branch })
+                    body: JSON.stringify({ 
+                        branch: branch,
+                        repoPath: repoPath
+                    })
                 });
                 const data = await response.json();
 
@@ -279,27 +298,14 @@
 
         async function selectRepository(name, relativePath) {
             try {
-                const response = await fetch('/api/load-repo', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ relativePath: relativePath })
-                });
-                const data = await response.json();
-
-                if (response.ok) {
-                    branchName.textContent = data.branch || 'unknown';
-                    repoModal.classList.add('hidden');
-                    
-                    // Navigate to the repository URL
-                    const url = new URL(window.location.origin);
-                    url.pathname = '/' + relativePath;
-                    url.searchParams.set('b', data.branch);
-                    window.location.href = url.toString();
-                } else {
-                    alert(`Error selecting repository: ${data.error || 'Unknown error'}`);
-                }
+                repoModal.classList.add('hidden');
+                
+                // Navigate to the repository URL with the branch parameter
+                const url = new URL(window.location.origin);
+                url.pathname = '/' + relativePath;
+                window.location.href = url.toString();
             } catch (error) {
-                alert(`Connection error: ${error.message}`);
+                alert(`Error: ${error.message}`);
             }
         }
 
@@ -331,31 +337,6 @@
         }
 
         branchSelectorBtn.addEventListener('click', async () => {
-            // Ensure repo is loaded before showing branches
-            const pathname = window.location.pathname;
-            let relativePath = null;
-            if (pathname && pathname !== '/') {
-                relativePath = pathname.startsWith('/') ? pathname.substring(1) : pathname;
-            }
-            
-            if (relativePath) {
-                try {
-                    const response = await fetch('/api/load-repo', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ relativePath: relativePath })
-                    });
-                    const data = await response.json();
-                    if (!response.ok) {
-                        alert(`Error loading repository: ${data.error || 'Unknown error'}`);
-                        return;
-                    }
-                } catch (error) {
-                    alert(`Connection error: ${error.message}`);
-                    return;
-                }
-            }
-            
             branchModal.classList.remove('hidden');
             loadBranches();
         });
@@ -392,7 +373,12 @@
             loadingSpinner.classList.remove('hidden');
 
             try {
-                const response = await fetch('/api/push', { method: 'POST' });
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/push', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                const response = await fetch(url.toString(), { method: 'POST' });
                 const data = await response.json();
 
                 if (response.ok) {
