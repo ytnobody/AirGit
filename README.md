@@ -54,6 +54,35 @@ export AIRGIT_REPO_PATH=$HOME
 
 5. Open http://localhost:8080 in your browser
 
+### Using Release Binaries
+
+Alternatively, you can download pre-built binaries directly from the [Releases](../../releases) page:
+
+1. Go to the **Releases** page
+2. Select the version and download the binary for your OS and architecture:
+   - `airgit-linux-amd64` - Linux (x86_64)
+   - `airgit-linux-arm64` - Linux (ARM64)
+   - `airgit-darwin-amd64` - macOS (Intel)
+   - `airgit-darwin-arm64` - macOS (Apple Silicon)
+   - `airgit-windows-amd64.exe` - Windows (x86_64)
+
+3. Make the binary executable (Linux/macOS):
+
+```bash
+chmod +x airgit-linux-amd64
+```
+
+4. Run the binary:
+
+```bash
+./airgit-linux-amd64
+```
+
+Or on Windows:
+```cmd
+airgit-windows-amd64.exe
+```
+
 ### Displaying Help
 
 To see all available options, use:
