@@ -120,6 +120,7 @@ func main() {
 
 	http.HandleFunc("/manifest.json", serveManifest)
 	http.HandleFunc("/service-worker.js", serveServiceWorker)
+	http.HandleFunc("/icon.png", serveIcon)
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/push", handlePush)
 	http.HandleFunc("/api/pull", handlePull)
@@ -221,6 +222,17 @@ func serveServiceWorker(w http.ResponseWriter, r *http.Request) {
 	data, err := staticFiles.ReadFile("static/service-worker.js")
 	if err != nil {
 		http.Error(w, "Failed to read service-worker.js", http.StatusInternalServerError)
+		return
+	}
+	w.Write(data)
+}
+
+func serveIcon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	data, err := staticFiles.ReadFile("static/icon.png")
+	if err != nil {
+		http.Error(w, "Failed to read icon.png", http.StatusInternalServerError)
 		return
 	}
 	w.Write(data)
