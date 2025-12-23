@@ -1,5 +1,7 @@
 # AirGit
 
+![AirGit Logo](logo.png)
+
 A lightweight web-based GUI for managing Git repositories directly from your browser. Push, pull, create branches, manage remotes, and more - all through an intuitive mobile-friendly interface.
 
 ## Features
