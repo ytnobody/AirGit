@@ -117,7 +117,31 @@
                 <div id="repos-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
                     <div class="text-center text-gray-400 text-sm">Loading...</div>
                 </div>
+                <button id="create-repo-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Repository</button>
                 <button id="modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
+
+        <!-- Create Repository Modal -->
+        <div id="create-repo-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Create New Repository</h2>
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Repository Name</label>
+                        <input id="create-repo-name" type="text" placeholder="my-repo" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Subdirectories (optional)</label>
+                        <input id="create-repo-subdirs" type="text" placeholder="src,tests,docs" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <div class="text-xs text-gray-500 mt-1">Comma-separated list</div>
+                    </div>
+                </div>
+                <div id="create-repo-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="create-repo-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-repo-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
@@ -150,6 +174,13 @@
         const repoModal = document.getElementById('repo-modal');
         const reposList = document.getElementById('repos-list');
         const modalCloseBtn = document.getElementById('modal-close-btn');
+        const createRepoBtn = document.getElementById('create-repo-btn');
+        const createRepoModal = document.getElementById('create-repo-modal');
+        const createRepoNameInput = document.getElementById('create-repo-name');
+        const createRepoSubdirsInput = document.getElementById('create-repo-subdirs');
+        const createRepoSubmitBtn = document.getElementById('create-repo-submit');
+        const createRepoCloseBtn = document.getElementById('create-repo-close-btn');
+        const createRepoError = document.getElementById('create-repo-error');
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -404,6 +435,78 @@
                 repoModal.classList.add('hidden');
             }
         });
+
+        createRepoBtn.addEventListener('click', () => {
+            repoModal.classList.add('hidden');
+            createRepoModal.classList.remove('hidden');
+            createRepoNameInput.value = '';
+            createRepoSubdirsInput.value = '';
+            createRepoError.classList.add('hidden');
+            createRepoNameInput.focus();
+        });
+
+        createRepoCloseBtn.addEventListener('click', () => {
+            createRepoModal.classList.add('hidden');
+        });
+
+        createRepoModal.addEventListener('click', (e) => {
+            if (e.target === createRepoModal) {
+                createRepoModal.classList.add('hidden');
+            }
+        });
+
+        createRepoSubmitBtn.addEventListener('click', async () => {
+            const repoName = createRepoNameInput.value.trim();
+            const subdirs = createRepoSubdirsInput.value.trim();
+
+            if (!repoName) {
+                showCreateRepoError('Repository name is required');
+                return;
+            }
+
+            createRepoSubmitBtn.disabled = true;
+            createRepoSubmitBtn.textContent = 'Creating...';
+            createRepoError.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/repo/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repoName: repoName,
+                        subdirs: subdirs || ''
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    createRepoModal.classList.add('hidden');
+                    createRepoSubmitBtn.disabled = false;
+                    createRepoSubmitBtn.textContent = 'Create';
+                    
+                    // Reload repositories and show success
+                    repoModal.classList.remove('hidden');
+                    loadRepositories();
+                    
+                    // Show success message with logs
+                    showLog(data.log || ['Repository created successfully']);
+                } else {
+                    showCreateRepoError(data.error || 'Failed to create repository');
+                    createRepoSubmitBtn.disabled = false;
+                    createRepoSubmitBtn.textContent = 'Create';
+                }
+            } catch (error) {
+                showCreateRepoError('Network error: ' + error.message);
+                createRepoSubmitBtn.disabled = false;
+                createRepoSubmitBtn.textContent = 'Create';
+            }
+        });
+
+        function showCreateRepoError(message) {
+            createRepoError.textContent = message;
+            createRepoError.classList.remove('hidden');
+        }
 
         closeSuccessBtn.addEventListener('click', () => {
             successMessage.classList.add('hidden');
