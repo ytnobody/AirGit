@@ -140,7 +140,7 @@
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
             if (pathname && pathname !== '/') {
-                return pathname.startsWith('/') ? pathname.substring(1) : pathname;
+                return pathname;
             }
             return null;
         }
