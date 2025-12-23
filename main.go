@@ -281,42 +281,6 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 
 	var logs []string
 
-	// git add .
-	output, err := executeGitCommand("add", ".")
-	logs = append(logs, "$ git add .")
-	if output != "" {
-		logs = append(logs, output)
-	}
-	if err != nil {
-		resp := Response{
-			Error: fmt.Sprintf("git add failed: %v", err),
-			Log:   logs,
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// git commit
-	output, err = executeGitCommand("commit", "-m", "Updated via AirGit")
-	logs = append(logs, "$ git commit -m \"Updated via AirGit\"")
-	if output != "" {
-		logs = append(logs, output)
-	}
-	if err != nil {
-		// Commit may fail if nothing to commit, which is ok
-		if !strings.Contains(err.Error(), "nothing to commit") {
-			resp := Response{
-				Error: fmt.Sprintf("git commit failed: %v", err),
-				Log:   logs,
-			}
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(resp)
-			return
-		}
-		logs = append(logs, "(nothing to commit)")
-	}
-
 	// Get current branch
 	branch, err := executeGitCommand("branch", "--show-current")
 	if err != nil || strings.TrimSpace(branch) == "" {
