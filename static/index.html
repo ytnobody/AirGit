@@ -187,11 +187,14 @@
                 const data = await response.json();
                 if (response.ok && data.branches) {
                     displayBranches(data.branches);
+                } else if (data.error) {
+                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error}</div>`;
                 } else {
-                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error || 'Failed to load branches'}</div>`;
+                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load branches</div>`;
                 }
             } catch (error) {
-                branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed</div>`;
+                console.error('Branch load error:', error);
+                branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${error.message}</div>`;
             }
         }
 
@@ -230,18 +233,21 @@
         }
 
         async function loadRepositories() {
-            try {
-                const response = await fetch('/api/repos');
-                const data = await response.json();
-                if (response.ok && data.repositories) {
-                    displayRepositories(data.repositories);
-                } else {
-                    reposList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error || 'Failed to load repositories'}</div>`;
-                }
-            } catch (error) {
-                reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed</div>`;
-            }
-        }
+             try {
+                 const response = await fetch('/api/repos');
+                 const data = await response.json();
+                 if (response.ok && data.repositories) {
+                     displayRepositories(data.repositories);
+                 } else if (data.error) {
+                     reposList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error}</div>`;
+                 } else {
+                     reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load repositories</div>`;
+                 }
+             } catch (error) {
+                 console.error('Repository load error:', error);
+                 reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${error.message}</div>`;
+             }
+         }
 
         function displayRepositories(repos) {
             if (repos.length === 0) {

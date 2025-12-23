@@ -297,8 +297,10 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 func handleListRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	log.Printf("ListRepos: scanning path=%s", config.RepoPath)
 	repos, err := listRepositories(config.RepoPath)
 	if err != nil {
+		log.Printf("ListRepos error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error": fmt.Sprintf("Failed to list repos: %v", err),
@@ -306,6 +308,7 @@ func handleListRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("ListRepos: found %d repositories", len(repos))
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"repositories": repos,
 	})
@@ -495,6 +498,11 @@ func listRepositories(basePath string) ([]Repository, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list repositories: %v", err)
+	}
+
+	// Return empty slice instead of nil
+	if repos == nil {
+		repos = []Repository{}
 	}
 
 	return repos, nil
