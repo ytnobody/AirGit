@@ -78,7 +78,11 @@ func main() {
 func serveStatic(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		data, _ := staticFiles.ReadFile("static/index.html")
+		data, err := staticFiles.ReadFile("static/index.html")
+		if err != nil {
+			http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
+			return
+		}
 		w.Write(data)
 		return
 	}
@@ -87,13 +91,21 @@ func serveStatic(w http.ResponseWriter, r *http.Request) {
 
 func serveManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/manifest+json")
-	data, _ := staticFiles.ReadFile("static/manifest.json")
+	data, err := staticFiles.ReadFile("static/manifest.json")
+	if err != nil {
+		http.Error(w, "Failed to read manifest.json", http.StatusInternalServerError)
+		return
+	}
 	w.Write(data)
 }
 
 func serveServiceWorker(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
-	data, _ := staticFiles.ReadFile("static/service-worker.js")
+	data, err := staticFiles.ReadFile("static/service-worker.js")
+	if err != nil {
+		http.Error(w, "Failed to read service-worker.js", http.StatusInternalServerError)
+		return
+	}
 	w.Write(data)
 }
 
