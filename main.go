@@ -407,7 +407,7 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve the relative path safely to prevent directory traversal
-	resolvedPath := filepath.Join(config.RepoPath, req.RelativePath)
+	resolvedPath := filepath.Join(baseRepoPath, req.RelativePath)
 	resolvedPath, err := filepath.Abs(resolvedPath)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -418,7 +418,7 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check that resolved path is within the base repo path
-	basePath, _ := filepath.Abs(config.RepoPath)
+	basePath, _ := filepath.Abs(baseRepoPath)
 	if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -715,6 +715,11 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	originalRepoPath := config.RepoPath
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
 	if r.Method == http.MethodPost {
 		// POST: select a repository from the request body
 		var req struct {
@@ -738,7 +743,7 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Resolve the relative path safely to prevent directory traversal
-		resolvedPath := filepath.Join(config.RepoPath, req.RelativePath)
+		resolvedPath := filepath.Join(baseRepoPath, req.RelativePath)
 		resolvedPath, err := filepath.Abs(resolvedPath)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -749,7 +754,7 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Check that resolved path is within the base repo path
-		basePath, _ := filepath.Abs(config.RepoPath)
+		basePath, _ := filepath.Abs(baseRepoPath)
 		if !strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) && resolvedPath != basePath {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]string{
@@ -767,11 +772,11 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 		// If relativePath is provided, update repo path safely
 		if relativePath != "" {
 			// Resolve the relative path safely to prevent directory traversal
-			resolvedPath := filepath.Join(config.RepoPath, relativePath)
+			resolvedPath := filepath.Join(baseRepoPath, relativePath)
 			resolvedPath, err := filepath.Abs(resolvedPath)
 			if err == nil {
 				// Check that resolved path is within the base repo path
-				basePath, _ := filepath.Abs(config.RepoPath)
+				basePath, _ := filepath.Abs(baseRepoPath)
 				if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
 					config.RepoPath = resolvedPath
 				}
@@ -806,17 +811,22 @@ func handleLoadRepo(w http.ResponseWriter, r *http.Request) {
 func handleInit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	originalRepoPath := config.RepoPath
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
 	relativePath := r.URL.Query().Get("relativePath")
 	branch := r.URL.Query().Get("branch")
 
 	// If relativePath is provided, update repo path safely
 	if relativePath != "" {
 		// Resolve the relative path safely to prevent directory traversal
-		resolvedPath := filepath.Join(config.RepoPath, relativePath)
+		resolvedPath := filepath.Join(baseRepoPath, relativePath)
 		resolvedPath, err := filepath.Abs(resolvedPath)
 		if err == nil {
 			// Check that resolved path is within the base repo path
-			basePath, _ := filepath.Abs(config.RepoPath)
+			basePath, _ := filepath.Abs(baseRepoPath)
 			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
 				config.RepoPath = resolvedPath
 			}
