@@ -25,6 +25,8 @@ type Config struct {
 	RepoPath   string
 	ListenAddr string
 	ListenPort string
+	TLSCert    string
+	TLSKey     string
 }
 
 type Response struct {
@@ -65,6 +67,8 @@ func init() {
 		RepoPath:   getEnv("AIRGIT_REPO_PATH", os.Getenv("HOME")),
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
 		ListenPort: getEnv("AIRGIT_LISTEN_PORT", "8080"),
+		TLSCert:    getEnv("AIRGIT_TLS_CERT", ""),
+		TLSKey:     getEnv("AIRGIT_TLS_KEY", ""),
 	}
 	baseRepoPath = config.RepoPath
 
@@ -84,6 +88,8 @@ func main() {
 	var repoPath string
 	var listenAddr string
 	var listenPort string
+	var tlsCert string
+	var tlsKey string
 
 	flag.BoolVar(&showHelp, "help", false, "Show help message")
 	flag.BoolVar(&showHelp, "h", false, "Show help message (shorthand)")
@@ -94,6 +100,8 @@ func main() {
 	flag.StringVar(&listenPort, "listen-port", "", "Server listen port (default: 8080)")
 	flag.StringVar(&listenPort, "port", "", "Server listen port (alias for --listen-port, default: 8080)")
 	flag.StringVar(&listenPort, "p", "", "Server listen port (shorthand, default: 8080)")
+	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file (for HTTPS)")
+	flag.StringVar(&tlsKey, "tls-key", "", "Path to TLS key file (for HTTPS)")
 
 	flag.Parse()
 
@@ -116,6 +124,12 @@ func main() {
 	}
 	if listenPort != "" {
 		config.ListenPort = listenPort
+	}
+	if tlsCert != "" {
+		config.TLSCert = tlsCert
+	}
+	if tlsKey != "" {
+		config.TLSKey = tlsKey
 	}
 
 	http.HandleFunc("/manifest.json", serveManifest)
@@ -143,9 +157,18 @@ func main() {
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
-	log.Printf("Starting AirGit on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatal(err)
+	
+	// Determine if using TLS
+	if config.TLSCert != "" && config.TLSKey != "" {
+		log.Printf("Starting AirGit on https://%s (with TLS)", addr)
+		if err := http.ListenAndServeTLS(addr, config.TLSCert, config.TLSKey, nil); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		log.Printf("Starting AirGit on http://%s", addr)
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -161,6 +184,8 @@ Options:
   --listen-addr <addr>      Server listen address (env: AIRGIT_LISTEN_ADDR, default: 0.0.0.0)
   -p, --port, --listen-port <port>
                             Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
+  --tls-cert <path>         Path to TLS certificate file (env: AIRGIT_TLS_CERT, for HTTPS)
+  --tls-key <path>          Path to TLS key file (env: AIRGIT_TLS_KEY, for HTTPS)
 
 Examples:
   # Using environment variables
@@ -169,6 +194,9 @@ Examples:
 
   # Using command-line flags
   airgit --repo-path /path/to/repo
+
+  # With HTTPS (requires certificate and key files)
+  airgit --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem
 
   # Using port option
   airgit -p 3000
@@ -185,6 +213,7 @@ For more information, visit: https://github.com/your-repo/AirGit
 func serveRoot(w http.ResponseWriter, r *http.Request) {
 	// Always serve index.html - the frontend will handle routing
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	data, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {
 		http.Error(w, "Failed to read index.html", http.StatusInternalServerError)
@@ -209,6 +238,8 @@ func serveStatic(w http.ResponseWriter, r *http.Request) {
 
 func serveManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	data, err := staticFiles.ReadFile("static/manifest.json")
 	if err != nil {
 		http.Error(w, "Failed to read manifest.json", http.StatusInternalServerError)
@@ -218,7 +249,8 @@ func serveManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveServiceWorker(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	data, err := staticFiles.ReadFile("static/service-worker.js")
 	if err != nil {
 		http.Error(w, "Failed to read service-worker.js", http.StatusInternalServerError)
@@ -229,7 +261,7 @@ func serveServiceWorker(w http.ResponseWriter, r *http.Request) {
 
 func serveIcon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	data, err := staticFiles.ReadFile("static/icon.png")
 	if err != nil {
 		http.Error(w, "Failed to read icon.png", http.StatusInternalServerError)
