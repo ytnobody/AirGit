@@ -196,13 +196,13 @@
                 if (response.ok && data.branches) {
                     displayBranches(data.branches);
                 } else if (data.error) {
-                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error}</div>`;
+                    branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
                 } else {
                     branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load branches</div>`;
                 }
             } catch (error) {
                 console.error('Branch load error:', error);
-                branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${error.message}</div>`;
+                branchesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
             }
         }
 
@@ -252,13 +252,13 @@
                  if (response.ok && data.repositories) {
                      displayRepositories(data.repositories);
                  } else if (data.error) {
-                     reposList.innerHTML = `<div class="text-center text-red-400 text-sm">${data.error}</div>`;
+                     reposList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
                  } else {
                      reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load repositories</div>`;
                  }
              } catch (error) {
                  console.error('Repository load error:', error);
-                 reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${error.message}</div>`;
+                 reposList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
              }
          }
 
@@ -330,7 +330,32 @@
             return div.innerHTML;
         }
 
-        branchSelectorBtn.addEventListener('click', () => {
+        branchSelectorBtn.addEventListener('click', async () => {
+            // Ensure repo is loaded before showing branches
+            const pathname = window.location.pathname;
+            let relativePath = null;
+            if (pathname && pathname !== '/') {
+                relativePath = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+            }
+            
+            if (relativePath) {
+                try {
+                    const response = await fetch('/api/load-repo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ relativePath: relativePath })
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        alert(`Error loading repository: ${data.error || 'Unknown error'}`);
+                        return;
+                    }
+                } catch (error) {
+                    alert(`Connection error: ${error.message}`);
+                    return;
+                }
+            }
+            
             branchModal.classList.remove('hidden');
             loadBranches();
         });

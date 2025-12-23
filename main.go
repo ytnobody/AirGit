@@ -552,8 +552,11 @@ func listRepositories(basePath string) ([]Repository, error) {
 func handleListBranches(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	log.Printf("handleListBranches: RepoPath=%s", config.RepoPath)
+
 	output, err := executeGitCommand("branch", "-a")
 	if err != nil {
+		log.Printf("handleListBranches error: %v, output=%s", err, output)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(Response{
 			Error: fmt.Sprintf("Failed to list branches: %v", err),
@@ -562,6 +565,7 @@ func handleListBranches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var branches []string
+	branchMap := make(map[string]bool)
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -569,6 +573,10 @@ func handleListBranches(w http.ResponseWriter, r *http.Request) {
 		}
 		line = strings.TrimPrefix(line, "* ")
 		line = strings.TrimPrefix(line, "remotes/")
+		if branchMap[line] {
+			continue
+		}
+		branchMap[line] = true
 		branches = append(branches, line)
 	}
 
