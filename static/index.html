@@ -407,9 +407,7 @@
                 if (response.ok) {
                     loadingSpinner.classList.add('hidden');
                     successMessage.classList.remove('hidden');
-                    if (data.log) {
-                        showLog(data.log);
-                    }
+                    showLog(data.log || ['Push completed']);
                 } else {
                     showError(data.error || 'Push failed');
                     if (data.log) {
@@ -418,6 +416,7 @@
                     resetUI();
                 }
             } catch (error) {
+                console.error('Push error:', error);
                 showError('Network error: ' + error.message);
                 resetUI();
             }
