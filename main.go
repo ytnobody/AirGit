@@ -455,8 +455,18 @@ func executeGitCommand(args ...string) (string, error) {
 func listRepositories(basePath string) ([]Repository, error) {
 	var repos []Repository
 
-	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+	// Check if basePath exists and is a directory
+	info, err := os.Stat(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access repository path: %v", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("repository path is not a directory: %s", basePath)
+	}
+
+	err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			// Skip directories we can't access instead of failing completely
 			return nil
 		}
 
