@@ -52,7 +52,7 @@ func init() {
 		SSHPort:    getEnv("AIRGIT_SSH_PORT", "22"),
 		SSHUser:    getEnv("AIRGIT_SSH_USER", "git"),
 		SSHKeyPath: getEnv("AIRGIT_SSH_KEY", filepath.Join(os.Getenv("HOME"), ".ssh/id_rsa")),
-		RepoPath:   getEnv("AIRGIT_REPO_PATH", "/var/git/repo"),
+		RepoPath:   getEnv("AIRGIT_REPO_PATH", os.Getenv("HOME")),
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
 		ListenPort: getEnv("AIRGIT_LISTEN_PORT", "8080"),
 	}
@@ -87,7 +87,7 @@ func main() {
 	flag.StringVar(&sshPort, "ssh-port", "", "SSH server port (default: 22)")
 	flag.StringVar(&sshUser, "ssh-user", "", "SSH username (default: git)")
 	flag.StringVar(&sshKey, "ssh-key", "", "Path to SSH private key (default: ~/.ssh/id_rsa)")
-	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository on remote server (default: /var/git/repo)")
+	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository on remote server (default: $HOME)")
 	flag.StringVar(&listenAddr, "listen-addr", "", "Server listen address (default: 0.0.0.0)")
 	flag.StringVar(&listenPort, "listen-port", "", "Server listen port (default: 8080)")
 	flag.StringVar(&listenPort, "port", "", "Server listen port (alias for --listen-port, default: 8080)")
@@ -155,7 +155,7 @@ Options:
   --ssh-port <port>         SSH server port (env: AIRGIT_SSH_PORT, default: 22)
   --ssh-user <user>         SSH username (env: AIRGIT_SSH_USER, default: git)
   --ssh-key <path>          Path to SSH private key (env: AIRGIT_SSH_KEY, default: ~/.ssh/id_rsa)
-  --repo-path <path>        Absolute path to Git repository on remote server (env: AIRGIT_REPO_PATH, default: /var/git/repo)
+  --repo-path <path>        Absolute path to Git repository on remote server (env: AIRGIT_REPO_PATH, default: $HOME)
   --listen-addr <addr>      Server listen address (env: AIRGIT_LISTEN_ADDR, default: 0.0.0.0)
   -p, --port, --listen-port <port>
                             Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
