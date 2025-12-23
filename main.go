@@ -85,6 +85,8 @@ func main() {
 	flag.StringVar(&repoPath, "repo-path", "", "Absolute path to Git repository on remote server (default: /var/git/repo)")
 	flag.StringVar(&listenAddr, "listen-addr", "", "Server listen address (default: 0.0.0.0)")
 	flag.StringVar(&listenPort, "listen-port", "", "Server listen port (default: 8080)")
+	flag.StringVar(&listenPort, "port", "", "Server listen port (alias for --listen-port, default: 8080)")
+	flag.StringVar(&listenPort, "p", "", "Server listen port (shorthand, default: 8080)")
 
 	flag.Parse()
 
@@ -148,7 +150,8 @@ Options:
   --ssh-key <path>          Path to SSH private key (env: AIRGIT_SSH_KEY, default: ~/.ssh/id_rsa)
   --repo-path <path>        Absolute path to Git repository on remote server (env: AIRGIT_REPO_PATH, default: /var/git/repo)
   --listen-addr <addr>      Server listen address (env: AIRGIT_LISTEN_ADDR, default: 0.0.0.0)
-  --listen-port <port>      Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
+  -p, --port, --listen-port <port>
+                            Server listen port (env: AIRGIT_LISTEN_PORT, default: 8080)
 
 Examples:
   # Using environment variables
@@ -158,6 +161,10 @@ Examples:
 
   # Using command-line flags
   airgit --ssh-host example.com --repo-path /var/git/my-repo
+
+  # Using port option
+  airgit -p 3000
+  airgit --port 3000
 
   # Show help and version
   airgit --help
