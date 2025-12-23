@@ -279,13 +279,13 @@
                     </div>
 
                     <!-- PWA Install Section -->
-                    <div id="pwa-section" class="hidden border border-sky-200 rounded p-4 bg-white/50">
+                    <div id="pwa-section" class="border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
                             <div>
                                 <h3 class="text-sm font-semibold text-gray-700">Install App</h3>
                                 <p class="text-xs text-gray-600 mt-1">Add AirGit to your home screen</p>
                             </div>
-                            <div id="pwa-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
+                            <div id="pwa-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600">
                                 Ready
                             </div>
                         </div>
@@ -1387,36 +1387,64 @@
                 const installed = await navigator.getInstalledRelatedApps();
                 const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
+                // Already installed or running as app
                 if (isStandalone || (installed && installed.length > 0)) {
-                    pwaSection.classList.add('hidden');
+                    pwaStatusBadge.textContent = '✓ Installed';
+                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    pwaStatusMessage.textContent = 'AirGit is already installed!';
+                    pwaInstallBtn.disabled = true;
+                    pwaInstallBtn.className = 'w-full bg-sky-300 cursor-not-allowed px-4 py-2 rounded text-white text-sm font-medium opacity-60';
+                    pwaBtnText.textContent = 'Already Installed';
                     return;
                 }
 
+                // Can install via beforeinstallprompt
                 if (deferredPrompt) {
-                    pwaSection.classList.remove('hidden');
                     pwaStatusBadge.textContent = '✓ Ready';
                     pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     pwaStatusMessage.textContent = 'Install AirGit as an app for quick access.';
                     pwaInstallBtn.disabled = false;
                     pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    pwaBtnText.textContent = 'Install App';
                 } else {
-                    pwaSection.classList.add('hidden');
+                    // Manual installation available (iOS, etc.)
+                    pwaStatusBadge.textContent = '✓ Available';
+                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    pwaStatusMessage.textContent = 'Use "Share" > "Add to Home Screen" to install on iOS.';
+                    pwaInstallBtn.disabled = false;
+                    pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    pwaBtnText.textContent = 'Install Guide';
                 }
             } catch (error) {
                 console.error('Error checking PWA status:', error);
-                pwaSection.classList.add('hidden');
+                // Still show the section even if check fails
+                pwaStatusBadge.textContent = '✓ Ready';
+                pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                pwaStatusMessage.textContent = 'Install AirGit as an app for quick access.';
+                pwaInstallBtn.disabled = false;
+                pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
         }
 
         function updatePWAStatus() {
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
             if (isStandalone) {
-                pwaSection.classList.add('hidden');
+                pwaStatusBadge.textContent = '✓ Installed';
+                pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                pwaStatusMessage.textContent = 'AirGit is already installed and running as an app!';
+                pwaInstallBtn.disabled = true;
+                pwaInstallBtn.className = 'w-full bg-sky-300 cursor-not-allowed px-4 py-2 rounded text-white text-sm font-medium opacity-60';
+                pwaBtnText.textContent = 'Already Installed';
             }
         }
 
         pwaInstallBtn.addEventListener('click', async () => {
             if (!deferredPrompt) {
+                // Show installation guide for iOS or other browsers
+                alert('Installation Guide:\n\n' +
+                      'Chrome/Edge: Look for "Install app" in the address bar or browser menu.\n\n' +
+                      'iOS Safari: Tap Share (↗️) > Add to Home Screen\n\n' +
+                      'Samsung Internet: Tap Menu (☰) > Add to Home Screen');
                 return;
             }
 
@@ -1433,17 +1461,19 @@
                     pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     pwaStatusMessage.textContent = '✓ AirGit has been installed! Check your home screen.';
                     pwaInstallBtn.disabled = true;
-                    pwaInstallBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    pwaInstallBtn.className = 'w-full bg-sky-300 cursor-not-allowed px-4 py-2 rounded text-white text-sm font-medium opacity-60';
                     pwaBtnText.textContent = 'Already Installed';
+                    pwaSpinner.classList.add('hidden');
+                    pwaBtnText.classList.remove('hidden');
                 } else {
                     pwaStatusMessage.textContent = 'Installation cancelled.';
                     pwaBtnText.classList.remove('hidden');
                     pwaInstallBtn.disabled = false;
                     pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    pwaSpinner.classList.add('hidden');
                 }
                 
                 deferredPrompt = null;
-                pwaSpinner.classList.add('hidden');
             } catch (error) {
                 console.error('Error installing PWA:', error);
                 pwaStatusMessage.textContent = '✗ Installation error: ' + error.message;
