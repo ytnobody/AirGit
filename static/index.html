@@ -83,6 +83,7 @@
                     <div class="text-5xl mb-3">✓</div>
                     <div class="text-2xl font-bold text-emerald-400">Success!</div>
                     <div class="text-sm text-gray-400 mt-2">Pushed to origin</div>
+                    <button id="close-success-btn" class="mt-4 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
                 </div>
 
                 <!-- Error Message -->
@@ -134,6 +135,7 @@
         const pullLoadingSpinner = document.getElementById('pull-loading-spinner');
         const statusContainer = document.getElementById('status-container');
         const successMessage = document.getElementById('success-message');
+        const closeSuccessBtn = document.getElementById('close-success-btn');
         const errorMessage = document.getElementById('error-message');
         const logContainer = document.getElementById('log-container');
         const logOutput = document.getElementById('log-output');
@@ -379,6 +381,11 @@
             }
         });
 
+        closeSuccessBtn.addEventListener('click', () => {
+            successMessage.classList.add('hidden');
+            resetUI();
+        });
+
         pushButton.addEventListener('click', async () => {
             resetUI();
             pushButton.disabled = true;
@@ -402,7 +409,6 @@
                     if (data.log) {
                         showLog(data.log);
                     }
-                    setTimeout(() => resetUI(), 3000);
                 } else {
                     showError(data.error || 'Push failed');
                     if (data.log) {
@@ -439,11 +445,7 @@
                     if (data.log) {
                         showLog(data.log);
                     }
-                    // Reload branch info after pull
-                    setTimeout(() => {
-                        loadStatus();
-                        resetUI();
-                    }, 3000);
+                    loadStatus();
                 } else {
                     showError(data.error || 'Pull failed');
                     if (data.log) {
