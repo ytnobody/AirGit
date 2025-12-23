@@ -233,6 +233,27 @@
                             </svg>
                         </button>
                     </div>
+
+                    <!-- Service Status Section -->
+                    <div class="border border-gray-700 rounded p-4 bg-gray-900/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-200">Service Status</h3>
+                                <p class="text-xs text-gray-400 mt-1">Start AirGit via systemd</p>
+                            </div>
+                            <div id="service-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
+                                Checking...
+                            </div>
+                        </div>
+                        <div id="service-status-message" class="text-xs text-gray-400 mb-3"></div>
+                        <button id="service-start-btn" class="w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                            <span id="service-btn-text">Start Service</span>
+                            <svg id="service-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <button id="settings-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
@@ -1115,6 +1136,106 @@
                 systemdRegisterBtn.disabled = false;
                 systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
+        });
+
+        // Service Status Features
+        const serviceStartBtn = document.getElementById('service-start-btn');
+        const serviceBtnText = document.getElementById('service-btn-text');
+        const serviceSpinner = document.getElementById('service-spinner');
+        const serviceStatusBadge = document.getElementById('service-status-badge');
+        const serviceStatusMessage = document.getElementById('service-status-message');
+
+        async function loadServiceStatus() {
+            try {
+                const response = await fetch('/api/systemd/service-status');
+                const data = await response.json();
+
+                if (!data.registered) {
+                    // Service not registered
+                    serviceStatusBadge.textContent = 'Not Registered';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300';
+                    serviceStatusMessage.textContent = 'Service must be registered first.';
+                    serviceStartBtn.disabled = true;
+                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceBtnText.textContent = 'Register First';
+                } else if (data.running) {
+                    // Service is running
+                    serviceStatusBadge.textContent = '✓ Running';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusMessage.textContent = 'Service is running via systemd.';
+                    serviceStartBtn.disabled = true;
+                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceBtnText.textContent = 'Already Running';
+                } else {
+                    // Service is registered but not running
+                    serviceStatusBadge.textContent = 'Stopped';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300';
+                    serviceStatusMessage.textContent = 'Service is registered but not running. Click below to start.';
+                    serviceStartBtn.disabled = false;
+                    serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    serviceBtnText.textContent = 'Start Service';
+                }
+            } catch (error) {
+                console.error('Error checking service status:', error);
+                serviceStatusBadge.textContent = 'Error';
+                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                serviceStatusMessage.textContent = 'Could not check service status.';
+            }
+        }
+
+        serviceStartBtn.addEventListener('click', async () => {
+            serviceStartBtn.disabled = true;
+            serviceBtnText.classList.add('hidden');
+            serviceSpinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/systemd/service-start', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Success
+                    serviceStatusBadge.textContent = '✓ Running';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusMessage.textContent = '✓ Service started successfully!';
+                    serviceStartBtn.disabled = true;
+                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceBtnText.textContent = 'Already Running';
+                    serviceSpinner.classList.add('hidden');
+                } else if (response.status === 409) {
+                    // Already running
+                    serviceStatusBadge.textContent = '✓ Running';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusMessage.textContent = 'Service is already running.';
+                    serviceStartBtn.disabled = true;
+                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceBtnText.textContent = 'Already Running';
+                    serviceSpinner.classList.add('hidden');
+                } else {
+                    // Error
+                    serviceStatusMessage.textContent = '✗ Error: ' + (data.error || 'Failed to start service');
+                    serviceStatusBadge.textContent = 'Error';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                    serviceBtnText.classList.remove('hidden');
+                    serviceSpinner.classList.add('hidden');
+                    serviceStartBtn.disabled = false;
+                    serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                }
+            } catch (error) {
+                console.error('Error starting service:', error);
+                serviceStatusMessage.textContent = '✗ Network error: ' + error.message;
+                serviceStatusBadge.textContent = 'Error';
+                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                serviceBtnText.classList.remove('hidden');
+                serviceSpinner.classList.add('hidden');
+                serviceStartBtn.disabled = false;
+                serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+            }
+        });
+
+        // Update service status when settings modal opens
+        const originalSettingsOpen = settingsBtn.onclick;
+        settingsBtn.addEventListener('click', () => {
+            loadServiceStatus();
         });
 
         initializeFromUrl();

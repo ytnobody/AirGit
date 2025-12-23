@@ -127,6 +127,8 @@ func main() {
 	http.HandleFunc("/api/remote/remove", handleRemoveRemote)
 	http.HandleFunc("/api/systemd/register", handleSystemdRegister)
 	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
+	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
+	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -1583,4 +1585,75 @@ func isSystemdServiceRegistered() bool {
 	servicePath := filepath.Join(homeDir, ".config", "systemd", "user", "airgit.service")
 	_, err = os.Stat(servicePath)
 	return err == nil
+}
+
+func handleSystemdServiceStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if service is registered first
+	if !isSystemdServiceRegistered() {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"registered": false,
+			"running":    false,
+		})
+		return
+	}
+
+	// Check if service is running
+	cmd := exec.Command("systemctl", "--user", "is-active", "airgit")
+	err := cmd.Run()
+
+	isRunning := err == nil
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"registered": true,
+		"running":    isRunning,
+	})
+}
+
+func handleSystemdServiceStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if service is registered
+	if !isSystemdServiceRegistered() {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Service is not registered with systemd",
+		})
+		return
+	}
+
+	// Check if already running
+	cmd := exec.Command("systemctl", "--user", "is-active", "airgit")
+	if cmd.Run() == nil {
+		// Already running
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Service is already running",
+		})
+		return
+	}
+
+	// Start the service
+	cmd = exec.Command("systemctl", "--user", "start", "airgit")
+	if err := cmd.Run(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to start service: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Service started successfully",
+	})
 }

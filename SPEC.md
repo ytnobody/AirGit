@@ -53,7 +53,7 @@
 ## 6. Systemd ユーザーモードサービス登録機能
 
 ### 概要
-AirGit をユーザーモード（user-mode）の systemd サービスとして登録し、自動起動を実現する機能を提供する。
+AirGit をユーザーモード（user-mode）の systemd サービスとして登録し、自動起動を実現する機能を提供する。また、登録されたサービスの状態を確認し、必要に応じて手動で起動することも可能。
 
 ### API エンドポイント
 
@@ -92,6 +92,67 @@ AirGit をユーザーモード systemd サービスとして登録する。
   "error": "Service is already registered with systemd"
 }
 ```
+
+#### 3. **Service Status API (`GET /api/systemd/service-status`)** (NEW)
+登録されたサービスの実行状態を確認する。
+
+**レスポンス例（実行中）:**
+```json
+{
+  "registered": true,
+  "running": true
+}
+```
+
+**レスポンス例（停止中）:**
+```json
+{
+  "registered": true,
+  "running": false
+}
+```
+
+**レスポンス例（未登録）:**
+```json
+{
+  "registered": false,
+  "running": false
+}
+```
+
+#### 4. **Service Start API (`POST /api/systemd/service-start`)** (NEW)
+登録されたサービスを起動する。
+
+**リクエスト:**
+```bash
+curl -X POST http://localhost:8080/api/systemd/service-start
+```
+
+**レスポンス成功例:**
+```json
+{
+  "success": true,
+  "message": "Service started successfully"
+}
+```
+
+**レスポンスエラー例（未登録）:**
+```json
+{
+  "success": false,
+  "error": "Service is not registered with systemd"
+}
+```
+**HTTP Status Code:** 400 (Bad Request)
+
+**レスポンスエラー例（既に実行中）:**
+```json
+{
+  "success": false,
+  "error": "Service is already running"
+}
+```
+**HTTP Status Code:** 409 (Conflict)
 
 ### サービスファイル内容
 生成されるサービスファイル（`airgit.service`）の内容：
