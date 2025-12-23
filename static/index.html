@@ -1370,6 +1370,7 @@
         // PWA Install Features
         let deferredPrompt = null;
         let pwaPromptShown = false;
+        let promptListenerActive = true;
         
         const pwaSection = document.getElementById('pwa-section');
         const pwaInstallBtn = document.getElementById('pwa-install-btn');
@@ -1378,14 +1379,20 @@
         const pwaStatusBadge = document.getElementById('pwa-status-badge');
         const pwaStatusMessage = document.getElementById('pwa-status-message');
 
-        // Prevent default install prompt and store it
-        window.addEventListener('beforeinstallprompt', (e) => {
-            console.log('✓ beforeinstallprompt event captured');
-            e.preventDefault();
-            deferredPrompt = e;
-            pwaPromptShown = false;
-            showReadyState();
-        });
+        // Multiple listeners for beforeinstallprompt to catch it at any time
+        function setupBeforeInstallPromptListener() {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                if (promptListenerActive) {
+                    console.log('✓ beforeinstallprompt event captured');
+                    e.preventDefault();
+                    deferredPrompt = e;
+                    pwaPromptShown = false;
+                    showReadyState();
+                }
+            });
+        }
+
+        setupBeforeInstallPromptListener();
 
         // Listen for successful installation
         window.addEventListener('appinstalled', () => {
@@ -1474,25 +1481,7 @@
             try {
                 // If beforeinstallprompt is available, use the native prompt (HTTPS/localhost)
                 if (deferredPrompt && !pwaPromptShown) {
-                    console.log('Showing install prompt (beforeinstallprompt)...');
-                    await deferredPrompt.prompt();
-                    const { outcome } = await deferredPrompt.userChoice;
-                    
-                    console.log('User choice outcome:', outcome);
-                    pwaPromptShown = true;
-                    
-                    if (outcome === 'accepted') {
-                        showInstalledState();
-                        pwaStatusMessage.textContent = '✓ Installation successful! Check your home screen.';
-                    } else {
-                        showReadyState();
-                        pwaStatusMessage.textContent = 'Installation cancelled.';
-                    }
-                    
-                    deferredPrompt = null;
-                    pwaBtnText.classList.remove('hidden');
-                    pwaSpinner.classList.add('hidden');
-                    pwaInstallBtn.disabled = false;
+                    await triggerInstallPrompt();
                     return;
                 }
 
@@ -1504,7 +1493,7 @@
                     return;
                 }
 
-                // HTTP environment or beforeinstallprompt not ready - use Web Share API
+                // HTTP environment or beforeinstallprompt not ready - use Web Share API or wait for prompt
                 console.log('Using HTTP fallback (Web Share API)...');
                 await showHTTPFallback();
                 
@@ -1548,12 +1537,21 @@
                     return;
                 }
                 
-                // Fallback: Try to access Web App Manifest directly and trigger installation
-                // Some browsers support installing directly via API
-                console.log('Web Share API not available, trying alternative methods');
+                // Fallback: Try to trigger beforeinstallprompt by waiting a bit longer
+                console.log('Web Share API not available, waiting for beforeinstallprompt...');
+                pwaStatusMessage.textContent = '⏳ Waiting for installation prompt...';
                 
-                // Try using a prompt modal instead
-                showInstallPromptModal();
+                // Try to wait for beforeinstallprompt with longer timeout
+                const promptReceived = await waitForBeforeInstallPrompt(3000);
+                
+                if (promptReceived && deferredPrompt) {
+                    console.log('beforeinstallprompt received after wait');
+                    // Recursively call button click to use the newly received prompt
+                    await triggerInstallPrompt();
+                } else {
+                    // Still no prompt - show helpful message
+                    showInstallPromptModal();
+                }
             } catch (error) {
                 if (error.name === 'AbortError') {
                     console.log('User cancelled share action');
@@ -1563,6 +1561,67 @@
                     console.error('Error in HTTP fallback:', error);
                     showInstallPromptModal();
                 }
+            }
+        }
+
+        function waitForBeforeInstallPrompt(timeoutMs) {
+            return new Promise((resolve) => {
+                let resolved = false;
+                const timeout = setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(false);
+                    }
+                }, timeoutMs);
+
+                // Check for prompt periodically
+                const interval = setInterval(() => {
+                    if (deferredPrompt) {
+                        clearInterval(interval);
+                        clearTimeout(timeout);
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(true);
+                        }
+                    }
+                }, 100);
+            });
+        }
+
+        async function triggerInstallPrompt() {
+            if (!deferredPrompt) {
+                console.log('No deferredPrompt available');
+                return;
+            }
+
+            pwaInstallBtn.disabled = true;
+            pwaBtnText.classList.add('hidden');
+            pwaSpinner.classList.remove('hidden');
+
+            try {
+                console.log('Showing install prompt...');
+                await deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                console.log('User choice outcome:', outcome);
+                pwaPromptShown = true;
+                
+                if (outcome === 'accepted') {
+                    showInstalledState();
+                    pwaStatusMessage.textContent = '✓ Installation successful! Check your home screen.';
+                } else {
+                    showReadyState();
+                    pwaStatusMessage.textContent = 'Installation cancelled.';
+                }
+                
+                deferredPrompt = null;
+            } catch (error) {
+                console.error('Error with install prompt:', error);
+                pwaStatusMessage.textContent = '✗ Error: ' + error.message;
+            } finally {
+                pwaBtnText.classList.remove('hidden');
+                pwaSpinner.classList.add('hidden');
+                pwaInstallBtn.disabled = false;
             }
         }
 
