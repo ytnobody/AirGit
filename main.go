@@ -104,6 +104,7 @@ func main() {
 	http.HandleFunc("/service-worker.js", serveServiceWorker)
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/push", handlePush)
+	http.HandleFunc("/api/pull", handlePull)
 	http.HandleFunc("/api/repos", handleListRepos)
 	http.HandleFunc("/api/load-repo", handleLoadRepo)
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
@@ -357,6 +358,85 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		Log:    logs,
 	})
 }
+
+func handlePull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var logs []string
+
+	// Get current branch
+	branch, err := executeGitCommand("branch", "--show-current")
+	if err != nil || strings.TrimSpace(branch) == "" {
+		// Fallback: try alternative method
+		branch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			resp := Response{
+				Error: fmt.Sprintf("Failed to get branch: %v", err),
+				Log:   logs,
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+	}
+
+	branch = strings.TrimSpace(branch)
+
+	// git pull origin [branch]
+	output, err := executeGitCommand("pull", "origin", branch)
+	logs = append(logs, fmt.Sprintf("$ git pull origin %s", branch))
+	if output != "" {
+		logs = append(logs, output)
+	}
+	if err != nil {
+		resp := Response{
+			Error: fmt.Sprintf("git pull failed: %v", err),
+			Log:   logs,
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	logs = append(logs, "✓ Pull successful!")
+
+	json.NewEncoder(w).Encode(Response{
+		Branch: branch,
+		Log:    logs,
+	})
+}
+
 
 func handleListRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
