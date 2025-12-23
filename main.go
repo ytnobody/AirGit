@@ -300,7 +300,7 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	branch = strings.TrimSpace(branch)
 
 	// git push origin [branch]
-	output, err = executeGitCommand("push", "origin", branch)
+	output, err := executeGitCommand("push", "origin", branch)
 	logs = append(logs, fmt.Sprintf("$ git push origin %s", branch))
 	if output != "" {
 		logs = append(logs, output)
