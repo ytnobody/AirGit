@@ -457,6 +457,10 @@ func listRepositories(basePath string) ([]Repository, error) {
 			return nil
 		}
 
+		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
+			return filepath.SkipDir
+		}
+
 		if info.Name() == ".git" && info.IsDir() {
 			repoPath := filepath.Dir(path)
 			name := filepath.Base(repoPath)
