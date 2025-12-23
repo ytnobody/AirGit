@@ -40,6 +40,7 @@ type Repository struct {
 }
 
 var config Config
+var baseRepoPath string
 
 func init() {
 	config = Config{
@@ -47,6 +48,7 @@ func init() {
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
 		ListenPort: getEnv("AIRGIT_LISTEN_PORT", "8080"),
 	}
+	baseRepoPath = config.RepoPath
 
 	log.Printf("Config: RepoPath=%s", config.RepoPath)
 }
@@ -359,8 +361,8 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 func handleListRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	log.Printf("ListRepos: scanning path=%s", config.RepoPath)
-	repos, err := listRepositories(config.RepoPath)
+	log.Printf("ListRepos: scanning path=%s", baseRepoPath)
+	repos, err := listRepositories(baseRepoPath)
 	if err != nil {
 		log.Printf("ListRepos error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
