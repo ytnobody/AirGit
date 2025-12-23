@@ -424,15 +424,17 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    console.log('PUSH response.ok - hiding spinner and showing success');
                     loadingSpinner.classList.add('hidden');
+                    buttonText.classList.add('hidden');
+                    successMessage.style.display = 'block';
                     successMessage.classList.remove('hidden');
-                    console.log('PUSH success');
+                    console.log('PUSH success message displayed');
                     if (data.log && Array.isArray(data.log) && data.log.length > 0) {
                         showLog(data.log);
                     } else {
                         showLog(['Push completed successfully']);
                     }
-                    // Reload status after push (similar to pull)
                     loadStatus();
                 } else {
                     showError(data.error || 'Push failed');
