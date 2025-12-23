@@ -249,7 +249,7 @@
                     // Update URL to reflect the new branch
                     const url = new URL(window.location);
                     url.searchParams.set('b', data.branch);
-                    window.history.pushState({}, '', url);
+                    window.history.pushState({}, '', url.toString());
                 } else {
                     alert(`Error checking out branch: ${data.error || 'Unknown error'}`);
                 }
