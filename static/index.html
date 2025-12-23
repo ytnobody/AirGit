@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1f2937">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>AirGit - Push from Mobile</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231f2937' width='180' height='180'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='80' font-weight='bold' fill='%2310b981' font-family='system-ui'>A</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%231f2937' width='32' height='32'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='24' font-weight='bold' fill='%2310b981' font-family='system-ui'>A</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #111827;
+            color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }
+        .push-button:active {
+            transform: scale(0.98);
+        }
+        .loading {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success-animation {
+            animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-50">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 border-b border-gray-700 px-4 py-4 safe-area-inset-top">
+            <div class="max-w-sm mx-auto">
+                <h1 class="text-xl font-bold text-emerald-400 mb-2">AirGit</h1>
+                <div class="text-sm text-gray-400 space-y-1">
+                    <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
+                    <div>Server: <span id="server-info" class="font-mono text-gray-200">Loading...</span></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex items-center justify-center px-4 py-8 safe-area-inset-bottom">
+            <div class="w-full max-w-sm">
+                <!-- Status Alert -->
+                <div id="status-container" class="mb-6 hidden"></div>
+
+                <!-- Push Button -->
+                <div class="flex justify-center">
+                    <button id="push-button" class="push-button w-32 h-32 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                        <span id="button-text">PUSH</span>
+                        <svg id="loading-spinner" class="loading hidden w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Success Message -->
+                <div id="success-message" class="hidden mt-8 text-center success-animation">
+                    <div class="text-5xl mb-3">✓</div>
+                    <div class="text-2xl font-bold text-emerald-400">Success!</div>
+                    <div class="text-sm text-gray-400 mt-2">Pushed to origin</div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="hidden mt-8 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                </div>
+
+                <!-- Log Output -->
+                <div id="log-container" class="hidden mt-6">
+                    <div class="text-xs text-gray-500 mb-2">Log Output:</div>
+                    <div id="log-output" class="bg-gray-800 border border-gray-700 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300">
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        }
+
+        const pushButton = document.getElementById('push-button');
+        const buttonText = document.getElementById('button-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const statusContainer = document.getElementById('status-container');
+        const successMessage = document.getElementById('success-message');
+        const errorMessage = document.getElementById('error-message');
+        const logContainer = document.getElementById('log-container');
+        const logOutput = document.getElementById('log-output');
+        const branchName = document.getElementById('branch-name');
+        const serverInfo = document.getElementById('server-info');
+
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                if (response.ok) {
+                    branchName.textContent = data.branch || 'unknown';
+                    serverInfo.textContent = data.server || 'unknown';
+                } else {
+                    branchName.textContent = 'Error';
+                    serverInfo.textContent = data.error || 'Unknown error';
+                }
+            } catch (error) {
+                branchName.textContent = 'Error';
+                serverInfo.textContent = 'Connection failed';
+            }
+        }
+
+        function resetUI() {
+            pushButton.disabled = false;
+            buttonText.textContent = 'PUSH';
+            loadingSpinner.classList.add('hidden');
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            logContainer.classList.add('hidden');
+            statusContainer.classList.add('hidden');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function showLog(lines) {
+            logOutput.innerHTML = lines.map(line => `<div>${escapeHtml(line)}</div>`).join('');
+            logContainer.classList.remove('hidden');
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        pushButton.addEventListener('click', async () => {
+            resetUI();
+            pushButton.disabled = true;
+            buttonText.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/push', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok) {
+                    buttonText.classList.add('hidden');
+                    loadingSpinner.classList.add('hidden');
+                    successMessage.classList.remove('hidden');
+                    if (data.log) {
+                        showLog(data.log);
+                    }
+                    setTimeout(() => resetUI(), 3000);
+                } else {
+                    showError(data.error || 'Push failed');
+                    if (data.log) {
+                        showLog(data.log);
+                    }
+                    resetUI();
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+                resetUI();
+            }
+        });
+
+        loadStatus();
+        setInterval(loadStatus, 5000);
+    </script>
+</body>
+</html>

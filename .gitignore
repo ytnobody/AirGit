@@ -1,0 +1,10 @@
+airgit
+airgit-*
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+*.iml
+vendor/
+dist/
