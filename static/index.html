@@ -51,6 +51,9 @@
                 </div>
                 <div class="text-sm text-gray-400 space-y-1">
                     <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
+                    <div id="tracking-info" class="text-xs text-gray-500 mt-1 hidden">
+                        <span id="ahead-behind-status"></span>
+                    </div>
                 </div>
             </div>
         </header>
@@ -201,6 +204,8 @@
         console.log('Elements loaded:', { pushButton, pullButton, logContainer, logOutput });
         const branchName = document.getElementById('branch-name');
         const repoName = document.getElementById('repo-name');
+        const trackingInfo = document.getElementById('tracking-info');
+        const aheadBehindStatus = document.getElementById('ahead-behind-status');
         const branchSelectorBtn = document.getElementById('branch-selector-btn');
         const branchModal = document.getElementById('branch-modal');
         const branchesList = document.getElementById('branches-list');
@@ -257,6 +262,7 @@
                     if (data.repoName) {
                         repoName.textContent = data.repoName;
                     }
+                    displayAheadBehind(data.ahead || 0, data.behind || 0);
                 } else {
                     branchName.textContent = 'Error';
                 }
@@ -288,6 +294,7 @@
                     if (data.repoName) {
                         repoName.textContent = data.repoName;
                     }
+                    displayAheadBehind(data.ahead || 0, data.behind || 0);
                 } else {
                     branchName.textContent = 'Error';
                     console.error('Load repo error:', data);
@@ -330,8 +337,20 @@
                 <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
                         onclick="checkoutBranch('${escapeHtml(branch)}')">
                     <div class="font-semibold text-emerald-400">${escapeHtml(branch)}</div>
+                    <div id="branch-status-${escapeHtml(branch)}" class="text-xs text-gray-400 mt-1"></div>
                 </button>
             `).join('');
+
+            // Load ahead/behind info for each branch
+            branches.forEach(async (branch) => {
+                try {
+                    // Get the ahead/behind info by temporarily checking out the branch
+                    // Actually, we can fetch this without checkout by using git rev-list
+                    // For now, we'll display the info after checkout
+                } catch (error) {
+                    console.error(`Failed to get info for ${branch}:`, error);
+                }
+            });
         }
 
         async function checkoutBranch(branch) {
@@ -347,6 +366,7 @@
 
                 if (response.ok) {
                     branchName.textContent = data.branch || 'unknown';
+                    displayAheadBehind(data.ahead || 0, data.behind || 0);
                     branchModal.classList.add('hidden');
                     
                     // Update URL to reflect the new branch
@@ -452,6 +472,29 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function displayAheadBehind(ahead, behind) {
+            if (ahead === 0 && behind === 0) {
+                trackingInfo.classList.add('hidden');
+                return;
+            }
+
+            let status = '';
+            if (ahead > 0 && behind === 0) {
+                status = `📤 ${ahead} commit${ahead > 1 ? 's' : ''} ahead`;
+            } else if (behind > 0 && ahead === 0) {
+                status = `📥 ${behind} commit${behind > 1 ? 's' : ''} behind`;
+            } else if (ahead > 0 && behind > 0) {
+                status = `📤 ${ahead} ahead / 📥 ${behind} behind`;
+            }
+
+            if (status) {
+                aheadBehindStatus.textContent = status;
+                trackingInfo.classList.remove('hidden');
+            } else {
+                trackingInfo.classList.add('hidden');
+            }
         }
 
         branchSelectorBtn.addEventListener('click', async () => {
