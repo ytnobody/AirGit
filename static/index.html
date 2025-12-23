@@ -44,6 +44,7 @@
                 <div class="flex justify-between items-start mb-2">
                     <h1 class="text-xl font-bold text-emerald-400" id="repo-name">AirGit</h1>
                     <div class="flex gap-2">
+                        <button id="commits-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Log</button>
                         <button id="branch-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Branch</button>
                         <button id="remotes-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Remotes</button>
                         <button id="repo-selector-btn" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300">Repos</button>
@@ -259,6 +260,17 @@
                 <button id="settings-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
             </div>
         </div>
+
+        <!-- Commits Modal -->
+        <div id="commits-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
+                <h2 class="text-lg font-bold text-emerald-400 mb-4">Recent Commits (Last 20)</h2>
+                <div id="commits-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                </div>
+                <button id="commits-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -317,6 +329,10 @@
         const createBranchSubmitBtn = document.getElementById('create-branch-submit');
         const createBranchCloseBtn = document.getElementById('create-branch-close-btn');
         const createBranchError = document.getElementById('create-branch-error');
+        const commitsBtn = document.getElementById('commits-btn');
+        const commitsModal = document.getElementById('commits-modal');
+        const commitsList = document.getElementById('commits-list');
+        const commitsModalCloseBtn = document.getElementById('commits-modal-close-btn');
         let currentEditingRemote = null;
 
         function getCurrentRepositoryPath() {
@@ -659,6 +675,21 @@
             }
         });
 
+        commitsBtn.addEventListener('click', async () => {
+            commitsModal.classList.remove('hidden');
+            loadCommits();
+        });
+
+        commitsModalCloseBtn.addEventListener('click', () => {
+            commitsModal.classList.add('hidden');
+        });
+
+        commitsModal.addEventListener('click', (e) => {
+            if (e.target === commitsModal) {
+                commitsModal.classList.add('hidden');
+            }
+        });
+
         createBranchSubmitBtn.addEventListener('click', createBranch);
 
         remoteFormCloseBtn.addEventListener('click', () => {
@@ -730,6 +761,45 @@
         function showCreateRepoError(message) {
             createRepoError.textContent = message;
             createRepoError.classList.remove('hidden');
+        }
+
+        async function loadCommits() {
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/commits', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                url.searchParams.append('limit', '20');
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                if (response.ok && data.commits) {
+                    displayCommits(data.commits);
+                } else if (data.error) {
+                    commitsList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
+                } else {
+                    commitsList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load commits</div>`;
+                }
+            } catch (error) {
+                console.error('Commits load error:', error);
+                commitsList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function displayCommits(commits) {
+            if (commits.length === 0) {
+                commitsList.innerHTML = '<div class="text-center text-gray-400 text-sm">No commits found</div>';
+                return;
+            }
+
+            commitsList.innerHTML = commits.map(commit => `
+                <div class="bg-gray-700 hover:bg-gray-600 rounded px-4 py-3 text-gray-200 text-sm transition-colors">
+                    <div class="font-semibold text-emerald-400 font-mono text-xs">${escapeHtml(commit.hash.substring(0, 7))}</div>
+                    <div class="text-sm mt-1">${escapeHtml(commit.message)}</div>
+                    <div class="text-xs text-gray-400 mt-1">${escapeHtml(commit.author)}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(commit.date)}</div>
+                </div>
+            `).join('');
         }
 
         async function loadRemotes() {

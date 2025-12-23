@@ -37,6 +37,14 @@ type Response struct {
 	Remotes  []string    `json:"remotes,omitempty"`
 	Ahead    int         `json:"ahead,omitempty"`
 	Behind   int         `json:"behind,omitempty"`
+	Commits  []CommitInfo `json:"commits,omitempty"`
+}
+
+type CommitInfo struct {
+	Hash    string `json:"hash"`
+	Author  string `json:"author"`
+	Date    string `json:"date"`
+	Message string `json:"message"`
 }
 
 type RemoteInfo struct {
@@ -115,6 +123,7 @@ func main() {
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/push", handlePush)
 	http.HandleFunc("/api/pull", handlePull)
+	http.HandleFunc("/api/commits", handleListCommits)
 	http.HandleFunc("/api/repos", handleListRepos)
 	http.HandleFunc("/api/load-repo", handleLoadRepo)
 	http.HandleFunc("/api/branch/create", handleCreateBranch)
@@ -1697,4 +1706,81 @@ func handleSystemdServiceStart(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "Service started successfully",
 	})
+}
+
+func handleListCommits(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "20"
+	}
+
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	// Get commits using git log
+	format := "%H%n%an%n%ai%n%s%n---END---"
+	output, err := executeGitCommand("log", "-"+limit, "--format="+format)
+	if err != nil {
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to get commits: %v", err),
+		})
+		return
+	}
+
+	commits := parseCommits(output)
+
+	json.NewEncoder(w).Encode(Response{
+		Commits: commits,
+	})
+}
+
+func parseCommits(output string) []CommitInfo {
+	var commits []CommitInfo
+	entries := strings.Split(output, "---END---\n")
+
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		lines := strings.Split(entry, "\n")
+		if len(lines) < 4 {
+			continue
+		}
+
+		commit := CommitInfo{
+			Hash:    lines[0],
+			Author:  lines[1],
+			Date:    lines[2],
+			Message: lines[3],
+		}
+		commits = append(commits, commit)
+	}
+
+	return commits
 }
