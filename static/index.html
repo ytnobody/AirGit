@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1f2937">
+    <meta name="theme-color" content="#0ea5e9">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>AirGit - Git Operations from Mobile</title>
@@ -14,8 +14,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         body {
-            background-color: #111827;
-            color: #f3f4f6;
+            background-color: #ffffff;
+            color: #1f2937;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
         }
         .push-button:active {
@@ -37,16 +37,16 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-50">
+<body class="bg-white text-gray-900">
     <div class="min-h-screen flex flex-col pb-24">
         <!-- Header -->
-        <header class="bg-gray-800 border-b border-gray-700 px-4 py-4 safe-area-inset-top">
+        <header class="bg-sky-50 border-b border-sky-200 px-4 py-4 safe-area-inset-top">
             <div class="max-w-sm mx-auto">
                 <div class="flex justify-between items-start mb-2">
-                    <h1 class="text-xl font-bold text-emerald-400" id="repo-name">AirGit</h1>
+                    <h1 class="text-xl font-bold text-sky-600" id="repo-name">AirGit</h1>
                 </div>
-                <div class="text-sm text-gray-400 space-y-1">
-                    <div>Branch: <span id="branch-name" class="font-mono text-gray-200">Loading...</span></div>
+                <div class="text-sm text-gray-600 space-y-1">
+                    <div>Branch: <span id="branch-name" class="font-mono text-gray-700">Loading...</span></div>
                     <div id="tracking-info" class="text-xs text-gray-500 mt-1 hidden">
                         <span id="ahead-behind-status"></span>
                     </div>
@@ -55,25 +55,25 @@
         </header>
 
         <!-- Bottom Navigation Menu -->
-        <nav class="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 px-4 py-2 safe-area-inset-bottom">
+        <nav class="fixed bottom-0 left-0 right-0 bg-sky-50 border-t border-sky-200 px-4 py-2 safe-area-inset-bottom">
             <div class="max-w-sm mx-auto flex justify-around items-center">
-                <button id="repo-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                <button id="repo-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-hard-drive text-lg"></i>
                     <span class="text-xs font-medium">Repos</span>
                 </button>
-                <button id="branch-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                <button id="branch-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-folder-open text-lg"></i>
                     <span class="text-xs font-medium">Branch</span>
                 </button>
-                <button id="remotes-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                <button id="remotes-selector-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-cloud text-lg"></i>
                     <span class="text-xs font-medium">Remotes</span>
                 </button>
-                <button id="commits-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                <button id="commits-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-clock text-lg"></i>
                     <span class="text-xs font-medium">Log</span>
                 </button>
-                <button id="settings-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-300 hover:text-emerald-400 hover:bg-gray-700 transition-all duration-200">
+                <button id="settings-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-pen-to-square text-lg"></i>
                     <span class="text-xs font-medium">Settings</span>
                 </button>
@@ -88,14 +88,14 @@
 
                 <!-- Push Button -->
                 <div class="flex justify-center gap-6">
-                    <button id="push-button" class="push-button w-32 h-32 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                    <button id="push-button" class="push-button w-32 h-32 rounded-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-sky-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                         <span id="button-text">PUSH</span>
                         <svg id="loading-spinner" class="loading hidden w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                     </button>
-                    <button id="pull-button" class="push-button w-32 h-32 rounded-full bg-blue-500 hover:bg-blue-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                    <button id="pull-button" class="push-button w-32 h-32 rounded-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-sky-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
                         <span id="pull-button-text">PULL</span>
                         <svg id="pull-loading-spinner" class="loading hidden w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -107,19 +107,19 @@
                 <!-- Success Message -->
                 <div id="success-message" class="hidden mt-8 text-center success-animation">
                     <div class="text-5xl mb-3">✓</div>
-                    <div class="text-2xl font-bold text-emerald-400">Success!</div>
-                    <div class="text-sm text-gray-400 mt-2">Pushed to origin</div>
-                    <button id="close-success-btn" class="mt-4 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                    <div class="text-2xl font-bold text-sky-600">Success!</div>
+                    <div class="text-sm text-gray-600 mt-2">Pushed to origin</div>
+                    <button id="close-success-btn" class="mt-4 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
                 </div>
 
                 <!-- Error Message -->
-                <div id="error-message" class="hidden mt-8 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                <div id="error-message" class="hidden mt-8 p-4 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">
                 </div>
 
                 <!-- Log Output -->
                 <div id="log-container" class="hidden mt-6">
                     <div class="text-xs text-gray-500 mb-2">Log Output:</div>
-                    <div id="log-output" class="bg-gray-800 border border-gray-700 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300">
+                    <div id="log-output" class="bg-sky-50 border border-sky-200 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-600">
                     </div>
                 </div>
             </div>
@@ -127,126 +127,126 @@
 
         <!-- Branch Selector Modal -->
         <div id="branch-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Select Branch</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Select Branch</h2>
                 <div id="branches-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
-                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                    <div class="text-center text-gray-600 text-sm">Loading...</div>
                 </div>
-                <button id="create-branch-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Branch</button>
-                <button id="branch-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                <button id="create-branch-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Branch</button>
+                <button id="branch-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
             </div>
         </div>
 
         <!-- Repository Selector Modal -->
         <div id="repo-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Select Repository</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Select Repository</h2>
                 <div id="repos-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
-                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                    <div class="text-center text-gray-600 text-sm">Loading...</div>
                 </div>
-                <button id="create-repo-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Repository</button>
-                <button id="modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                <button id="create-repo-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ New Repository</button>
+                <button id="modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
             </div>
         </div>
 
         <!-- Create Repository Modal -->
         <div id="create-repo-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Create New Repository</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Create New Repository</h2>
                 <div class="space-y-4 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Repository Name</label>
-                        <input id="create-repo-name" type="text" placeholder="my-repo" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Repository Name</label>
+                        <input id="create-repo-name" type="text" placeholder="my-repo" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Subdirectories (optional)</label>
-                        <input id="create-repo-subdirs" type="text" placeholder="src,tests,docs" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Subdirectories (optional)</label>
+                        <input id="create-repo-subdirs" type="text" placeholder="src,tests,docs" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
                         <div class="text-xs text-gray-500 mt-1">Comma-separated list</div>
                     </div>
                 </div>
-                <div id="create-repo-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div id="create-repo-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
                 <div class="flex gap-2">
-                    <button id="create-repo-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
-                    <button id="create-repo-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                    <button id="create-repo-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-repo-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Remotes Management Modal -->
         <div id="remotes-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Manage Remotes</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Manage Remotes</h2>
                 <div id="remotes-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
-                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                    <div class="text-center text-gray-600 text-sm">Loading...</div>
                 </div>
-                <button id="add-remote-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ Add Remote</button>
-                <button id="remotes-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                <button id="add-remote-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium mb-2 transition-colors">+ Add Remote</button>
+                <button id="remotes-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
             </div>
         </div>
 
         <!-- Create Branch Modal -->
         <div id="create-branch-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Create New Branch</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Create New Branch</h2>
                 <div class="space-y-4 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Branch Name</label>
-                        <input id="create-branch-name" type="text" placeholder="feature/new-feature" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Branch Name</label>
+                        <input id="create-branch-name" type="text" placeholder="feature/new-feature" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
                     </div>
                     <div class="flex items-center">
-                        <input id="create-branch-checkout" type="checkbox" class="w-4 h-4 bg-gray-700 border border-gray-600 rounded">
-                        <label for="create-branch-checkout" class="ml-2 text-sm text-gray-300">Switch to new branch</label>
+                        <input id="create-branch-checkout" type="checkbox" class="w-4 h-4 bg-sky-100 border border-sky-200 rounded">
+                        <label for="create-branch-checkout" class="ml-2 text-sm text-gray-600">Switch to new branch</label>
                     </div>
                 </div>
-                <div id="create-branch-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div id="create-branch-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
                 <div class="flex gap-2">
-                    <button id="create-branch-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
-                    <button id="create-branch-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                    <button id="create-branch-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-branch-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Add/Edit Remote Modal -->
         <div id="remote-form-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
-                <h2 id="remote-form-title" class="text-lg font-bold text-emerald-400 mb-4">Add Remote</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 id="remote-form-title" class="text-lg font-bold text-sky-600 mb-4">Add Remote</h2>
                 <div class="space-y-4 mb-6">
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Remote Name</label>
-                        <input id="remote-name-input" type="text" placeholder="origin" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Remote Name</label>
+                        <input id="remote-name-input" type="text" placeholder="origin" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Repository URL</label>
-                        <input id="remote-url-input" type="text" placeholder="https://github.com/user/repo.git" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 placeholder-gray-500 text-sm focus:outline-none focus:border-emerald-500">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Repository URL</label>
+                        <input id="remote-url-input" type="text" placeholder="https://github.com/user/repo.git" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
                     </div>
                 </div>
-                <div id="remote-form-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm"></div>
+                <div id="remote-form-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
                 <div class="flex gap-2">
-                    <button id="remote-form-submit" class="flex-1 bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Save</button>
-                    <button id="remote-form-close-btn" class="flex-1 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Cancel</button>
+                    <button id="remote-form-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Save</button>
+                    <button id="remote-form-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Settings Modal -->
         <div id="settings-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Settings</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Settings</h2>
                 
                 <!-- Systemd Registration Section -->
                 <div class="space-y-4 mb-6">
-                    <div class="border border-gray-700 rounded p-4 bg-gray-900/50">
+                    <div class="border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
                             <div>
-                                <h3 class="text-sm font-semibold text-gray-200">Auto-Start with Systemd</h3>
-                                <p class="text-xs text-gray-400 mt-1">Register AirGit to auto-start on login</p>
+                                <h3 class="text-sm font-semibold text-gray-700">Auto-Start with Systemd</h3>
+                                <p class="text-xs text-gray-600 mt-1">Register AirGit to auto-start on login</p>
                             </div>
-                            <div id="systemd-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
+                            <div id="systemd-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
                                 Checking...
                             </div>
                         </div>
-                        <div id="systemd-status-message" class="text-xs text-gray-400 mb-3"></div>
-                        <button id="systemd-register-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                        <div id="systemd-status-message" class="text-xs text-gray-600 mb-3"></div>
+                        <button id="systemd-register-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
                             <span id="systemd-btn-text">Register with Systemd</span>
                             <svg id="systemd-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -256,18 +256,18 @@
                     </div>
 
                     <!-- Service Status Section -->
-                    <div class="border border-gray-700 rounded p-4 bg-gray-900/50">
+                    <div class="border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
                             <div>
-                                <h3 class="text-sm font-semibold text-gray-200">Service Status</h3>
-                                <p class="text-xs text-gray-400 mt-1">Start AirGit via systemd</p>
+                                <h3 class="text-sm font-semibold text-gray-700">Service Status</h3>
+                                <p class="text-xs text-gray-600 mt-1">Start AirGit via systemd</p>
                             </div>
-                            <div id="service-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
+                            <div id="service-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
                                 Checking...
                             </div>
                         </div>
-                        <div id="service-status-message" class="text-xs text-gray-400 mb-3"></div>
-                        <button id="service-start-btn" class="w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                        <div id="service-status-message" class="text-xs text-gray-600 mb-3"></div>
+                        <button id="service-start-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
                             <span id="service-btn-text">Start Service</span>
                             <svg id="service-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -277,18 +277,18 @@
                     </div>
 
                     <!-- PWA Install Section -->
-                    <div id="pwa-section" class="hidden border border-gray-700 rounded p-4 bg-gray-900/50">
+                    <div id="pwa-section" class="hidden border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
                             <div>
-                                <h3 class="text-sm font-semibold text-gray-200">Install App</h3>
-                                <p class="text-xs text-gray-400 mt-1">Add AirGit to your home screen</p>
+                                <h3 class="text-sm font-semibold text-gray-700">Install App</h3>
+                                <p class="text-xs text-gray-600 mt-1">Add AirGit to your home screen</p>
                             </div>
-                            <div id="pwa-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300">
+                            <div id="pwa-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
                                 Ready
                             </div>
                         </div>
-                        <div id="pwa-status-message" class="text-xs text-gray-400 mb-3"></div>
-                        <button id="pwa-install-btn" class="w-full bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                        <div id="pwa-status-message" class="text-xs text-gray-600 mb-3"></div>
+                        <button id="pwa-install-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
                             <span id="pwa-btn-text">Install App</span>
                             <svg id="pwa-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -298,18 +298,18 @@
                     </div>
                 </div>
 
-                <button id="settings-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                <button id="settings-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
             </div>
         </div>
 
         <!-- Commits Modal -->
         <div id="commits-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-gray-800 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-gray-700">
-                <h2 class="text-lg font-bold text-emerald-400 mb-4">Recent Commits (Last 20)</h2>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Recent Commits (Last 20)</h2>
                 <div id="commits-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
-                    <div class="text-center text-gray-400 text-sm">Loading...</div>
+                    <div class="text-center text-gray-600 text-sm">Loading...</div>
                 </div>
-                <button id="commits-modal-close-btn" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-gray-200 text-sm">Close</button>
+                <button id="commits-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
             </div>
         </div>
     </div>
@@ -470,15 +470,15 @@
 
         function displayBranches(branches) {
             if (branches.length === 0) {
-                branchesList.innerHTML = '<div class="text-center text-gray-400 text-sm">No branches found</div>';
+                branchesList.innerHTML = '<div class="text-center text-gray-600 text-sm">No branches found</div>';
                 return;
             }
 
             branchesList.innerHTML = branches.map(branch => `
-                <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
+                <button class="w-full text-left bg-sky-100 hover:bg-sky-200 px-4 py-3 rounded text-gray-700 text-sm transition-colors"
                         onclick="checkoutBranch('${escapeHtml(branch)}')">
-                    <div class="font-semibold text-emerald-400">${escapeHtml(branch)}</div>
-                    <div id="branch-status-${escapeHtml(branch)}" class="text-xs text-gray-400 mt-1"></div>
+                    <div class="font-semibold text-sky-600">${escapeHtml(branch)}</div>
+                    <div id="branch-status-${escapeHtml(branch)}" class="text-xs text-gray-600 mt-1"></div>
                 </button>
             `).join('');
 
@@ -541,15 +541,15 @@
 
         function displayRepositories(repos) {
             if (repos.length === 0) {
-                reposList.innerHTML = '<div class="text-center text-gray-400 text-sm">No repositories found</div>';
+                reposList.innerHTML = '<div class="text-center text-gray-600 text-sm">No repositories found</div>';
                 return;
             }
 
             reposList.innerHTML = repos.map(repo => `
-                <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
+                <button class="w-full text-left bg-sky-100 hover:bg-sky-200 px-4 py-3 rounded text-gray-700 text-sm transition-colors"
                         onclick="selectRepository('${escapeHtml(repo.name)}', '${escapeHtml(repo.path)}')">
-                    <div class="font-semibold text-emerald-400">${escapeHtml(repo.name)}</div>
-                    <div class="text-xs text-gray-400 truncate">${escapeHtml(repo.path)}</div>
+                    <div class="font-semibold text-sky-600">${escapeHtml(repo.name)}</div>
+                    <div class="text-xs text-gray-600 truncate">${escapeHtml(repo.path)}</div>
                 </button>
             `).join('');
         }
@@ -829,15 +829,15 @@
 
         function displayCommits(commits) {
             if (commits.length === 0) {
-                commitsList.innerHTML = '<div class="text-center text-gray-400 text-sm">No commits found</div>';
+                commitsList.innerHTML = '<div class="text-center text-gray-600 text-sm">No commits found</div>';
                 return;
             }
 
             commitsList.innerHTML = commits.map(commit => `
-                <div class="bg-gray-700 hover:bg-gray-600 rounded px-4 py-3 text-gray-200 text-sm transition-colors">
-                    <div class="font-semibold text-emerald-400 font-mono text-xs">${escapeHtml(commit.hash.substring(0, 7))}</div>
+                <div class="bg-sky-100 hover:bg-sky-200 rounded px-4 py-3 text-gray-700 text-sm transition-colors">
+                    <div class="font-semibold text-sky-600 font-mono text-xs">${escapeHtml(commit.hash.substring(0, 7))}</div>
                     <div class="text-sm mt-1">${escapeHtml(commit.message)}</div>
-                    <div class="text-xs text-gray-400 mt-1">${escapeHtml(commit.author)}</div>
+                    <div class="text-xs text-gray-600 mt-1">${escapeHtml(commit.author)}</div>
                     <div class="text-xs text-gray-500">${escapeHtml(commit.date)}</div>
                 </div>
             `).join('');
@@ -867,20 +867,20 @@
 
         function displayRemotes(remotes) {
             if (remotes.length === 0) {
-                remotesList.innerHTML = '<div class="text-center text-gray-400 text-sm">No remotes configured</div>';
+                remotesList.innerHTML = '<div class="text-center text-gray-600 text-sm">No remotes configured</div>';
                 return;
             }
 
             remotesList.innerHTML = remotes.map(remote => `
-                <div class="bg-gray-700 rounded px-4 py-3 text-gray-200 text-sm flex justify-between items-center">
+                <div class="bg-sky-100 rounded px-4 py-3 text-gray-700 text-sm flex justify-between items-center">
                     <div class="flex-1">
-                        <div class="font-semibold text-emerald-400">${escapeHtml(remote.name)}</div>
-                        <div class="text-xs text-gray-400 truncate">${escapeHtml(remote.url)}</div>
+                        <div class="font-semibold text-sky-600">${escapeHtml(remote.name)}</div>
+                        <div class="text-xs text-gray-600 truncate">${escapeHtml(remote.url)}</div>
                     </div>
                     <div class="flex gap-2 ml-2">
-                        <button class="text-xs bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded text-white transition-colors"
+                        <button class="text-xs bg-sky-600 hover:bg-sky-500 px-2 py-1 rounded text-white transition-colors"
                                 onclick="editRemote('${escapeHtml(remote.name)}', '${escapeHtml(remote.url)}')">Edit</button>
-                        <button class="text-xs bg-red-600 hover:bg-red-500 px-2 py-1 rounded text-white transition-colors"
+                        <button class="text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-white transition-colors"
                                 onclick="removeRemote('${escapeHtml(remote.name)}')">Remove</button>
                     </div>
                 </div>
@@ -1179,23 +1179,23 @@
 
                 if (data.registered) {
                     systemdStatusBadge.textContent = '✓ Registered';
-                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     systemdStatusMessage.textContent = 'AirGit is registered with systemd and will auto-start on login.';
                     systemdRegisterBtn.disabled = true;
-                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdRegisterBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     systemdBtnText.textContent = 'Already Registered';
                 } else {
                     systemdStatusBadge.textContent = 'Not Registered';
-                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600';
                     systemdStatusMessage.textContent = 'Click the button below to register AirGit for auto-start.';
                     systemdRegisterBtn.disabled = false;
-                    systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    systemdRegisterBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                     systemdBtnText.textContent = 'Register with Systemd';
                 }
             } catch (error) {
                 console.error('Error checking systemd status:', error);
                 systemdStatusBadge.textContent = 'Error';
-                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                 systemdStatusMessage.textContent = 'Could not check registration status.';
             }
         }
@@ -1212,10 +1212,10 @@
                 if (response.ok && data.success) {
                     // Show success and inform about automatic restart
                     systemdStatusBadge.textContent = '✓ Registered';
-                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     systemdStatusMessage.textContent = '✓ Successfully registered! Restarting via systemd...';
                     systemdRegisterBtn.disabled = true;
-                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdRegisterBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     systemdBtnText.textContent = 'Already Registered';
                     systemdSpinner.classList.add('hidden');
                     
@@ -1230,31 +1230,31 @@
                 } else if (response.status === 409) {
                     // Already registered
                     systemdStatusBadge.textContent = '✓ Registered';
-                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     systemdStatusMessage.textContent = 'AirGit is already registered with systemd.';
                     systemdRegisterBtn.disabled = true;
-                    systemdRegisterBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    systemdRegisterBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     systemdBtnText.textContent = 'Already Registered';
                     systemdSpinner.classList.add('hidden');
                 } else {
                     // Error
                     systemdStatusMessage.textContent = '✗ Error: ' + (data.error || 'Failed to register');
                     systemdStatusBadge.textContent = 'Error';
-                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                    systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                     systemdBtnText.classList.remove('hidden');
                     systemdSpinner.classList.add('hidden');
                     systemdRegisterBtn.disabled = false;
-                    systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    systemdRegisterBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                 }
             } catch (error) {
                 console.error('Error registering with systemd:', error);
                 systemdStatusMessage.textContent = '✗ Network error: ' + error.message;
                 systemdStatusBadge.textContent = 'Error';
-                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                systemdStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                 systemdBtnText.classList.remove('hidden');
                 systemdSpinner.classList.add('hidden');
                 systemdRegisterBtn.disabled = false;
-                systemdRegisterBtn.className = 'w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                systemdRegisterBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
         });
 
@@ -1273,32 +1273,32 @@
                 if (!data.registered) {
                     // Service not registered
                     serviceStatusBadge.textContent = 'Not Registered';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600';
                     serviceStatusMessage.textContent = 'Service must be registered first.';
                     serviceStartBtn.disabled = true;
-                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceStartBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     serviceBtnText.textContent = 'Register First';
                 } else if (data.running) {
                     // Service is running
                     serviceStatusBadge.textContent = '✓ Running';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     serviceStatusMessage.textContent = 'Service is running via systemd.';
                     serviceStartBtn.disabled = true;
-                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceStartBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     serviceBtnText.textContent = 'Already Running';
                 } else {
                     // Service is registered but not running
                     serviceStatusBadge.textContent = 'Stopped';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-yellow-900/50 text-yellow-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700';
                     serviceStatusMessage.textContent = 'Service is registered but not running. Click below to start.';
                     serviceStartBtn.disabled = false;
-                    serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    serviceStartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                     serviceBtnText.textContent = 'Start Service';
                 }
             } catch (error) {
                 console.error('Error checking service status:', error);
                 serviceStatusBadge.textContent = 'Error';
-                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                 serviceStatusMessage.textContent = 'Could not check service status.';
             }
         }
@@ -1315,40 +1315,40 @@
                 if (response.ok && data.success) {
                     // Success
                     serviceStatusBadge.textContent = '✓ Running';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     serviceStatusMessage.textContent = '✓ Service started successfully!';
                     serviceStartBtn.disabled = true;
-                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceStartBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     serviceBtnText.textContent = 'Already Running';
                     serviceSpinner.classList.add('hidden');
                 } else if (response.status === 409) {
                     // Already running
                     serviceStatusBadge.textContent = '✓ Running';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     serviceStatusMessage.textContent = 'Service is already running.';
                     serviceStartBtn.disabled = true;
-                    serviceStartBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    serviceStartBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     serviceBtnText.textContent = 'Already Running';
                     serviceSpinner.classList.add('hidden');
                 } else {
                     // Error
                     serviceStatusMessage.textContent = '✗ Error: ' + (data.error || 'Failed to start service');
                     serviceStatusBadge.textContent = 'Error';
-                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                    serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                     serviceBtnText.classList.remove('hidden');
                     serviceSpinner.classList.add('hidden');
                     serviceStartBtn.disabled = false;
-                    serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    serviceStartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                 }
             } catch (error) {
                 console.error('Error starting service:', error);
                 serviceStatusMessage.textContent = '✗ Network error: ' + error.message;
                 serviceStatusBadge.textContent = 'Error';
-                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                serviceStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                 serviceBtnText.classList.remove('hidden');
                 serviceSpinner.classList.add('hidden');
                 serviceStartBtn.disabled = false;
-                serviceStartBtn.className = 'w-full bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                serviceStartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
         });
 
@@ -1393,10 +1393,10 @@
                 if (deferredPrompt) {
                     pwaSection.classList.remove('hidden');
                     pwaStatusBadge.textContent = '✓ Ready';
-                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     pwaStatusMessage.textContent = 'Install AirGit as an app for quick access.';
                     pwaInstallBtn.disabled = false;
-                    pwaInstallBtn.className = 'w-full bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                 } else {
                     pwaSection.classList.add('hidden');
                 }
@@ -1428,16 +1428,16 @@
                 
                 if (outcome === 'accepted') {
                     pwaStatusBadge.textContent = '✓ Installed';
-                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-emerald-900/50 text-emerald-300';
+                    pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     pwaStatusMessage.textContent = '✓ AirGit has been installed! Check your home screen.';
                     pwaInstallBtn.disabled = true;
-                    pwaInstallBtn.className = 'w-full bg-gray-600 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    pwaInstallBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     pwaBtnText.textContent = 'Already Installed';
                 } else {
                     pwaStatusMessage.textContent = 'Installation cancelled.';
                     pwaBtnText.classList.remove('hidden');
                     pwaInstallBtn.disabled = false;
-                    pwaInstallBtn.className = 'w-full bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
                 }
                 
                 deferredPrompt = null;
@@ -1446,11 +1446,11 @@
                 console.error('Error installing PWA:', error);
                 pwaStatusMessage.textContent = '✗ Installation error: ' + error.message;
                 pwaStatusBadge.textContent = 'Error';
-                pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-900/50 text-red-300';
+                pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
                 pwaBtnText.classList.remove('hidden');
                 pwaSpinner.classList.add('hidden');
                 pwaInstallBtn.disabled = false;
-                pwaInstallBtn.className = 'w-full bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                pwaInstallBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
             }
         });
 
