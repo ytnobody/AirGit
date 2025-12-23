@@ -258,7 +258,7 @@
 
             reposList.innerHTML = repos.map(repo => `
                 <button class="w-full text-left bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded text-gray-200 text-sm transition-colors"
-                        onclick="selectRepository('${repo.name}', '${repo.path}')">
+                        onclick="selectRepository('${escapeHtml(repo.name)}', '${escapeHtml(repo.path)}')">
                     <div class="font-semibold text-emerald-400">${escapeHtml(repo.name)}</div>
                     <div class="text-xs text-gray-400 truncate">${escapeHtml(repo.path)}</div>
                 </button>
