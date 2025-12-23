@@ -33,6 +33,12 @@ type Response struct {
 	Log      []string    `json:"log,omitempty"`
 	Commit   string      `json:"commit,omitempty"`
 	Branches []string    `json:"branches,omitempty"`
+	Remotes  []string    `json:"remotes,omitempty"`
+}
+
+type RemoteInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 type Repository struct {
@@ -113,6 +119,7 @@ func main() {
 	http.HandleFunc("/api/checkout", handleCheckoutBranch)
 	http.HandleFunc("/api/repo/create", handleCreateRepo)
 	http.HandleFunc("/api/repo/init", handleInitRepo)
+	http.HandleFunc("/api/remotes", handleListRemotes)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -261,6 +268,10 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
+	remote := r.URL.Query().Get("remote")
+	if remote == "" {
+		remote = "origin"
+	}
 	
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
@@ -306,9 +317,9 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 
 	branch = strings.TrimSpace(branch)
 
-	// git push origin [branch]
-	output, err := executeGitCommand("push", "origin", branch)
-	logs = append(logs, fmt.Sprintf("$ git push origin %s", branch))
+	// git push [remote] [branch]
+	output, err := executeGitCommand("push", remote, branch)
+	logs = append(logs, fmt.Sprintf("$ git push %s %s", remote, branch))
 	if output != "" {
 		logs = append(logs, output)
 	}
@@ -344,6 +355,10 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
+	remote := r.URL.Query().Get("remote")
+	if remote == "" {
+		remote = "origin"
+	}
 	
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
@@ -389,9 +404,9 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 
 	branch = strings.TrimSpace(branch)
 
-	// git pull origin [branch]
-	output, err := executeGitCommand("pull", "origin", branch)
-	logs = append(logs, fmt.Sprintf("$ git pull origin %s", branch))
+	// git pull [remote] [branch]
+	output, err := executeGitCommand("pull", remote, branch)
+	logs = append(logs, fmt.Sprintf("$ git pull %s %s", remote, branch))
 	if output != "" {
 		logs = append(logs, output)
 	}
@@ -1106,5 +1121,74 @@ func handleInitRepo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{
 		RepoName: repoName,
 		Log:      logs,
+	})
+}
+
+func handleListRemotes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	output, err := executeGitCommand("remote", "-v")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{
+			Error: fmt.Sprintf("Failed to list remotes: %v", err),
+		})
+		return
+	}
+
+	var remotes []RemoteInfo
+	remoteMap := make(map[string]string)
+	
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			name := parts[0]
+			url := parts[1]
+			if remoteMap[name] == "" {
+				remoteMap[name] = url
+			}
+		}
+	}
+	
+	for name, url := range remoteMap {
+		remotes = append(remotes, RemoteInfo{
+			Name: name,
+			URL:  url,
+		})
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"remotes": remotes,
 	})
 }

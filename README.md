@@ -10,6 +10,7 @@ A lightweight web-based GUI tool for pushing Git changes from mobile devices via
 - 📴 PWA support (offline caching, home screen icon)
 - 🎨 Dark mode UI optimized for mobile
 - ⚡ Real-time branch and server info display
+- 🌐 Support for multiple remotes (origin, upstream, etc.)
 
 ## Quick Start
 
@@ -130,6 +131,55 @@ This is useful for:
 - Creating bookmarks for frequently used repository + branch combinations
 - Automating repository setup in CI/CD workflows
 
+## Using Remote Repositories
+
+### Query Multiple Remotes
+
+To view all configured remotes in a repository:
+
+```bash
+curl http://localhost:8080/api/remotes
+```
+
+Response:
+```json
+{
+  "remotes": [
+    {
+      "name": "origin",
+      "url": "git@github.com:user/repo.git"
+    },
+    {
+      "name": "upstream",
+      "url": "git@github.com:org/repo.git"
+    }
+  ]
+}
+```
+
+### Push to a Specific Remote
+
+Specify the `remote` query parameter when pushing:
+
+```bash
+curl -X POST http://localhost:8080/api/push?remote=upstream
+```
+
+### Pull from a Specific Remote
+
+Specify the `remote` query parameter when pulling:
+
+```bash
+curl -X POST http://localhost:8080/api/pull?remote=upstream
+```
+
+### Examples with Different Remotes
+
+- **Push to origin**: `POST /api/push?remote=origin`
+- **Push to upstream**: `POST /api/push?remote=upstream`
+- **Pull from origin**: `POST /api/pull?remote=origin`
+- **Pull from upstream**: `POST /api/pull?remote=upstream`
+
 ## API Endpoints
 
 ### GET /api/status
@@ -144,13 +194,52 @@ Response:
 ```
 
 ### POST /api/push
-Executes: `git add .` → `git commit -m "Updated via AirGit"` → `git push origin [branch]`
+Executes: `git add .` → `git commit -m "Updated via AirGit"` → `git push [remote] [branch]`
+
+Query Parameters:
+- `remote` (optional): Remote name to push to (default: `origin`)
 
 Response:
 ```json
 {
   "branch": "main",
   "log": ["$ git add .", "$ git commit...", "..."]
+}
+```
+
+### POST /api/pull
+Executes: `git pull [remote] [branch]`
+
+Query Parameters:
+- `remote` (optional): Remote name to pull from (default: `origin`)
+
+Response:
+```json
+{
+  "branch": "main",
+  "log": ["$ git pull...", "..."]
+}
+```
+
+### GET /api/remotes
+Returns list of remote repositories configured in the Git repository.
+
+Query Parameters:
+- `repoPath` (optional): Path to the repository
+
+Response:
+```json
+{
+  "remotes": [
+    {
+      "name": "origin",
+      "url": "git@github.com:user/repo.git"
+    },
+    {
+      "name": "upstream",
+      "url": "git@github.com:org/repo.git"
+    }
+  ]
 }
 ```
 
