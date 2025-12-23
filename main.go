@@ -219,11 +219,15 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	branch, err := executeGitCommand("branch", "--show-current")
-	if err != nil {
-		json.NewEncoder(w).Encode(Response{
-			Error: fmt.Sprintf("Failed to get branch: %v", err),
-		})
-		return
+	if err != nil || strings.TrimSpace(branch) == "" {
+		// Fallback: try alternative method to get current branch
+		branch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			json.NewEncoder(w).Encode(Response{
+				Error: fmt.Sprintf("Failed to get branch: %v", err),
+			})
+			return
+		}
 	}
 
 	branch = strings.TrimSpace(branch)
@@ -283,14 +287,18 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 
 	// Get current branch
 	branch, err := executeGitCommand("branch", "--show-current")
-	if err != nil {
-		resp := Response{
-			Error: fmt.Sprintf("Failed to get branch: %v", err),
-			Log:   logs,
+	if err != nil || strings.TrimSpace(branch) == "" {
+		// Fallback: try alternative method
+		branch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			resp := Response{
+				Error: fmt.Sprintf("Failed to get branch: %v", err),
+				Log:   logs,
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
-		return
 	}
 
 	branch = strings.TrimSpace(branch)
@@ -368,11 +376,15 @@ func handleSelectRepo(w http.ResponseWriter, r *http.Request) {
 
 	// Load status after changing repo
 	branch, err := executeGitCommand("branch", "--show-current")
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": fmt.Sprintf("Failed to get branch: %v", err),
-		})
-		return
+	if err != nil || strings.TrimSpace(branch) == "" {
+		// Fallback: try alternative method
+		branch, err = executeGitCommand("rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": fmt.Sprintf("Failed to get branch: %v", err),
+			})
+			return
+		}
 	}
 
 	branch = strings.TrimSpace(branch)
