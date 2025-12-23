@@ -1,12 +1,22 @@
 {
-  "name": "AirGit",
+  "name": "AirGit - Git Operations from Mobile",
   "short_name": "AirGit",
-  "description": "Push Git changes from mobile",
+  "description": "Push and pull Git changes from your mobile device",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0ea5e9",
   "orientation": "portrait-primary",
+  "categories": ["productivity"],
+  "screenshots": [
+    {
+      "src": "/icon.png",
+      "sizes": "800x800",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
   "icons": [
     {
       "src": "/icon.png",

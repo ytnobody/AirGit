@@ -318,7 +318,13 @@
 
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+            navigator.serviceWorker.register('/service-worker.js')
+                .then((registration) => {
+                    console.log('Service Worker registered successfully:', registration);
+                })
+                .catch((error) => {
+                    console.error('Service Worker registration failed:', error);
+                });
         }
 
         const pushButton = document.getElementById('push-button');
@@ -1385,11 +1391,14 @@
         });
 
         async function initializePWAInstall() {
+            console.log('Initializing PWA Install...');
             try {
                 const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+                console.log('Is Standalone:', isStandalone);
 
                 // Check if already installed
                 if (isStandalone) {
+                    console.log('App is running standalone');
                     showInstalledState();
                     return;
                 }
@@ -1397,14 +1406,19 @@
                 // Check installed related apps (iOS, Samsung, etc.)
                 try {
                     const installed = await navigator.getInstalledRelatedApps();
+                    console.log('Installed related apps:', installed);
                     if (installed && installed.length > 0) {
                         showInstalledState();
                         return;
                     }
                 } catch (e) {
                     // API not available - continue
+                    console.log('getInstalledRelatedApps not available:', e.message);
                 }
 
+                // Check if beforeinstallprompt is available
+                console.log('Deferred prompt available:', !!deferredPrompt);
+                
                 // Installation is available
                 showReadyState();
             } catch (error) {
@@ -1432,6 +1446,8 @@
         }
 
         pwaInstallBtn.addEventListener('click', async () => {
+            console.log('Install button clicked. deferredPrompt:', !!deferredPrompt);
+            
             // If beforeinstallprompt is available, use the native prompt
             if (deferredPrompt) {
                 pwaInstallBtn.disabled = true;
@@ -1439,8 +1455,11 @@
                 pwaSpinner.classList.remove('hidden');
 
                 try {
+                    console.log('Showing install prompt...');
                     deferredPrompt.prompt();
                     const { outcome } = await deferredPrompt.userChoice;
+                    
+                    console.log('User choice outcome:', outcome);
                     
                     if (outcome === 'accepted') {
                         showInstalledState();
@@ -1464,42 +1483,11 @@
                 return;
             }
 
-            // Fallback: Try Web Share API for direct installation
-            try {
-                pwaInstallBtn.disabled = true;
-                pwaBtnText.classList.add('hidden');
-                pwaSpinner.classList.remove('hidden');
-
-                // For iOS and other platforms without beforeinstallprompt
-                // We'll create a simple installation helper
-                const installData = {
-                    title: 'AirGit',
-                    text: 'Install AirGit as an app',
-                    url: window.location.href
-                };
-
-                if (navigator.share) {
-                    // Use native share for installation guidance
-                    await navigator.share(installData);
-                } else if (navigator.clipboard && navigator.clipboard.writeText) {
-                    // Fallback: Copy app URL to clipboard
-                    await navigator.clipboard.writeText(window.location.href);
-                    pwaStatusMessage.textContent = 'App URL copied! Add to home screen manually.';
-                } else {
-                    // Last resort: Open installation page
-                    pwaStatusMessage.textContent = 'Please save this page to your home screen.';
-                }
-
-                pwaBtnText.classList.remove('hidden');
-                pwaSpinner.classList.add('hidden');
-                pwaInstallBtn.disabled = false;
-            } catch (error) {
-                console.error('Error with installation fallback:', error);
-                pwaStatusMessage.textContent = 'Installation not available on this device.';
-                pwaBtnText.classList.remove('hidden');
-                pwaSpinner.classList.add('hidden');
-                pwaInstallBtn.disabled = false;
-            }
+            // No beforeinstallprompt available - show informative message
+            pwaStatusMessage.textContent = 'ℹ️ PWA installation not available in this browser. Please use Chrome, Edge, or try again in a supported browser.';
+            pwaStatusBadge.textContent = 'Not Available';
+            pwaStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700';
+            console.warn('beforeinstallprompt event not captured');
         });
 
         // Initialize on page load and when settings are opened
@@ -1509,6 +1497,45 @@
 
         initializeFromUrl();
         setInterval(loadStatus, 5000);
+
+        // PWA Debug Information
+        console.log('=== PWA Debug Info ===');
+        console.log('Protocol:', window.location.protocol);
+        console.log('Hostname:', window.location.hostname);
+        console.log('Service Worker supported:', 'serviceWorker' in navigator);
+        
+        // Check if HTTPS or localhost
+        const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        console.log('PWA installable (secure context):', isSecure);
+
+        // Check manifest loading
+        fetch('/manifest.json')
+            .then(r => r.json())
+            .then(manifest => {
+                console.log('Manifest loaded:', manifest);
+                console.log('Has icons:', manifest.icons?.length > 0);
+                console.log('Has start_url:', !!manifest.start_url);
+                console.log('Has display:', manifest.display);
+            })
+            .catch(e => console.error('Manifest load error:', e));
+
+        // Check service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                console.log('Service Worker registrations:', registrations.length);
+                registrations.forEach(reg => {
+                    console.log('- Scope:', reg.scope);
+                    console.log('- Active:', !!reg.active);
+                });
+            });
+        }
+
+        // Listen for beforeinstallprompt
+        window.addEventListener('beforeinstallprompt', () => {
+            console.log('✓ beforeinstallprompt event fired!');
+        });
+
+        console.log('=== End PWA Debug ===');
     </script>
 </body>
 </html>
