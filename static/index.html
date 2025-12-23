@@ -201,7 +201,11 @@
 
         async function loadBranches() {
             try {
+                const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/branches', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
                 const response = await fetch(url.toString());
                 const data = await response.json();
                 if (response.ok && data.branches) {
