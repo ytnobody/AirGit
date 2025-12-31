@@ -936,16 +936,20 @@
                     url.searchParams.append('repoPath', '/home/ytnobody/AirGit');
                 }
                 
+                console.log('Fetching issues from:', url.toString());
                 const response = await fetch(url.toString());
                 const data = await response.json();
                 
-                if (response.ok && data.issuesUrl) {
+                console.log('Issues response:', data);
+                
+                if (response.ok && data.owner) {
                     issuesRepoName.textContent = `${data.owner}/${data.repo}`;
                     issuesRemoteUrl.textContent = data.remoteUrl;
                     currentIssuesUrl = data.issuesUrl;
                     
-                    // Display issues list
-                    if (data.issues && data.issues.length > 0) {
+                    if (data.error) {
+                        showIssuesError(`Error fetching issues: ${data.error}`);
+                    } else if (data.issues && data.issues.length > 0) {
                         const issuesList = document.getElementById('issues-list');
                         issuesList.innerHTML = data.issues.map(issue => `
                             <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">

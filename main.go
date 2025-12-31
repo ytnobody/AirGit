@@ -2102,25 +2102,37 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
 	
 	var issuesOutput bytes.Buffer
+	var issuesError bytes.Buffer
 	cmd.Stdout = &issuesOutput
-	cmd.Stderr = &issuesOutput
+	cmd.Stderr = &issuesError
+	
+	log.Printf("gh command: cwd=%s, owner=%s, repo=%s", config.RepoPath, owner, repo)
 	
 	if err := cmd.Run(); err != nil {
-		log.Printf("gh issue list error: %v", err)
-		// Return empty list if gh fails
+		errMsg := strings.TrimSpace(issuesError.String())
+		log.Printf("gh issue list error: %v, stderr: %s", err, errMsg)
+		
+		// Return error message to UI
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"owner":     owner,
 			"repo":      repo,
 			"remoteUrl": remoteURL,
 			"issues":    []interface{}{},
+			"error":     errMsg,
 		})
 		return
 	}
 
 	// Parse JSON output
 	var issues []map[string]interface{}
-	if err := json.Unmarshal(issuesOutput.Bytes(), &issues); err != nil {
-		log.Printf("parse issues error: %v", err)
+	outputStr := strings.TrimSpace(issuesOutput.String())
+	log.Printf("gh output: %s", outputStr)
+	
+	if outputStr == "" {
+		// No issues found
+		issues = []map[string]interface{}{}
+	} else if err := json.Unmarshal(issuesOutput.Bytes(), &issues); err != nil {
+		log.Printf("parse issues error: %v, output: %s", err, outputStr)
 		issues = []map[string]interface{}{}
 	}
 
