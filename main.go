@@ -2353,7 +2353,9 @@ The Copilot CLI will implement the solution based on the issue description.
 	// Use copilot /delegate to generate implementation
 	copilotCmd := exec.Command("copilot", "/delegate", "--prompt", prompt)
 	copilotCmd.Dir = worktreePath
-	copilotCmd.Env = os.Environ()
+	env := os.Environ()
+	env = append(env, "NODE_OPTIONS=--input-type=module")
+	copilotCmd.Env = env
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
