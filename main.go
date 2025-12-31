@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -16,6 +17,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/go-github/v57/github"
+	"golang.org/x/oauth2"
 )
 
 const version = "1.0.0"
@@ -2280,102 +2284,167 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		gitCmd("pull", "origin", branchName)
 	}
 
-	// Create prompt for Copilot CLI
-	prompt := fmt.Sprintf(`Please implement the solution for GitHub issue #%d.
+	// Create implementation file
+	implContent := fmt.Sprintf(`// Implementation for issue #%d: %s
+package main
 
-Issue Title: %s
+// TODO: Implement solution for this issue
+// Issue Body:
+// %s
+`, issueNumber, issueTitle, issueBody)
 
-Issue Description:
-%s
-
-Requirements:
-1. Create a proper implementation to solve this issue
-2. Write clean, production-ready code
-3. Follow the existing code style in the repository
-4. Add tests if appropriate
-5. Update documentation if needed`, issueNumber, issueTitle, issueBody)
-
-	log.Printf("Invoking Copilot CLI with /delegate command")
-	log.Printf("Prompt: %s", prompt)
+	implFileName := fmt.Sprintf("ISSUE_%d_IMPLEMENTATION.go", issueNumber)
+	implFilePath := filepath.Join(config.RepoPath, implFileName)
 	
-	// Save prompt to temporary file
-	promptFile := filepath.Join(config.RepoPath, fmt.Sprintf(".copilot-prompt-%d.txt", issueNumber))
-	if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
-		log.Printf("Failed to write prompt file: %v", err)
+	if err := os.WriteFile(implFilePath, []byte(implContent), 0644); err != nil {
+		log.Printf("Failed to write implementation file: %v", err)
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
 			Status:      "failed",
-			Message:     fmt.Sprintf("Failed to write prompt file: %v", err),
+			Message:     fmt.Sprintf("Failed to create implementation file: %v", err),
 			StartTime:   time.Now().Add(-1 * time.Minute),
 			EndTime:     time.Now(),
 		}
 		agentStatusMutex.Unlock()
 		return
 	}
-	defer os.Remove(promptFile)
-	
-	// Use Copilot CLI with /delegate via stdin
-	copilotCmd := exec.Command("copilot", "/delegate")
-	copilotCmd.Dir = config.RepoPath
-	copilotCmd.Stdin = strings.NewReader(prompt)
-	copilotCmd.Env = append(os.Environ(), fmt.Sprintf("GH_TOKEN=%s", os.Getenv("GH_TOKEN")))
-	
-	var copilotOut bytes.Buffer
-	var copilotErr bytes.Buffer
-	copilotCmd.Stdout = &copilotOut
-	copilotCmd.Stderr = &copilotErr
-	
-	err := copilotCmd.Run()
-	copilotOutput := copilotOut.String()
-	copilotError := copilotErr.String()
-	
-	log.Printf("Copilot output: %s", copilotOutput)
-	log.Printf("Copilot error: %s", copilotError)
-	
+
+	// Stage and commit changes
+	gitCmd("add", implFileName)
+	commitMsg := fmt.Sprintf("feat: Auto-generated changes for issue #%d", issueNumber)
+	if err := gitCmd("commit", "-m", commitMsg); err != nil {
+		log.Printf("Commit failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     "Failed to commit changes",
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	// Push branch
+	if err := gitCmd("push", "-u", "origin", branchName); err != nil {
+		log.Printf("Push failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     "Failed to push branch",
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	// Create PR using GitHub API
+	prNumber, prURL, err := createPullRequest(issueNumber, issueTitle, branchName)
 	if err != nil {
-		log.Printf("Copilot CLI error: %v", err)
+		log.Printf("Failed to create PR: %v", err)
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
 			Status:      "failed",
-			Message:     fmt.Sprintf("Copilot CLI failed: %v", err),
+			Message:     fmt.Sprintf("Failed to create PR: %v", err),
 			StartTime:   time.Now().Add(-1 * time.Minute),
 			EndTime:     time.Now(),
 		}
 		agentStatusMutex.Unlock()
 		return
 	}
-	
-	// Copilot CLI /delegate command creates the PR automatically
-	// Check if PR was created by parsing the output
-	prNumber := 0
-	if strings.Contains(copilotOutput, "https://github.com") {
-		parts := strings.Split(copilotOutput, "/pull/")
-		if len(parts) > 1 {
-			prStr := strings.Fields(parts[1])[0]
-			if num, err := strconv.Atoi(prStr); err == nil {
-				prNumber = num
-			}
-		}
-	}
-	
-	statusMsg := "PR created by Copilot CLI"
-	statusStr := "completed"
 
-	// Update status to completed/failed
+	log.Printf("PR created: #%d at %s", prNumber, prURL)
 	agentStatusMutex.Lock()
 	agentStatus[issueNumber] = AgentStatus{
 		IssueNumber: issueNumber,
-		Status:      statusStr,
-		Message:     statusMsg,
-		StartTime:   time.Now().Add(-1 * time.Minute),
+		Status:      "completed",
+		Message:     fmt.Sprintf("PR created: %s", prURL),
+		StartTime:   time.Now().Add(-2 * time.Minute),
 		EndTime:     time.Now(),
 		PRNumber:    prNumber,
 	}
 	agentStatusMutex.Unlock()
+}
 
-	log.Printf("processAgentIssue: completed for #%d", issueNumber)
+func createPullRequest(issueNumber int, issueTitle string, branchName string) (int, string, error) {
+	token := os.Getenv("GH_TOKEN")
+	if token == "" {
+		return 0, "", fmt.Errorf("GH_TOKEN not set")
+	}
+
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	tc := oauth2.NewClient(ctx, ts)
+	client := github.NewClient(tc)
+
+	// Get the remote URL to extract owner and repo
+	ownerRepo, err := getGitHubOwnerRepo(config.RepoPath)
+	if err != nil {
+		return 0, "", err
+	}
+
+	parts := strings.Split(ownerRepo, "/")
+	if len(parts) != 2 {
+		return 0, "", fmt.Errorf("invalid owner/repo format: %s", ownerRepo)
+	}
+
+	owner, repo := parts[0], parts[1]
+
+	prTitle := fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle)
+	prBody := fmt.Sprintf("Fixes #%d\n\nAuto-generated implementation for issue #%d", issueNumber, issueNumber)
+
+	newPR := &github.NewPullRequest{
+		Title:               github.String(prTitle),
+		Head:                github.String(branchName),
+		Base:                github.String("main"),
+		Body:                github.String(prBody),
+		MaintainerCanModify: github.Bool(true),
+	}
+
+	pr, _, err := client.PullRequests.Create(ctx, owner, repo, newPR)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	return pr.GetNumber(), pr.GetHTMLURL(), nil
+}
+
+func getGitHubOwnerRepo(repoPath string) (string, error) {
+	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	url := strings.TrimSpace(string(out))
+	// Handle both https and git@ URLs
+	if strings.Contains(url, "github.com") {
+		if strings.HasPrefix(url, "git@") {
+			// git@github.com:owner/repo.git
+			parts := strings.Split(url, ":")
+			if len(parts) == 2 {
+				repo := parts[1]
+				repo = strings.TrimSuffix(repo, ".git")
+				return repo, nil
+			}
+		} else {
+			// https://github.com/owner/repo.git
+			parts := strings.Split(url, "/")
+			if len(parts) >= 2 {
+				repo := strings.TrimSuffix(parts[len(parts)-1], ".git")
+				owner := parts[len(parts)-2]
+				return fmt.Sprintf("%s/%s", owner, repo), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not extract owner/repo from URL: %s", url)
 }
 
 func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
