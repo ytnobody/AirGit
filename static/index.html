@@ -740,6 +740,16 @@
             }, 3000);
         }
 
+        function showErrorNotification(message, duration = 5000) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg max-w-xs z-50';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.remove();
+            }, duration);
+        }
+
         function displayAheadBehind(ahead, behind) {
             if (ahead === 0 && behind === 0) {
                 trackingInfo.classList.add('hidden');
@@ -1042,6 +1052,9 @@
                                             btn.classList.add('bg-red-600', 'hover:bg-red-500');
                                             btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
                                             btn.disabled = false;
+                                            if (status.message) {
+                                                showErrorNotification(`Agent failed: ${status.message}`, 10000);
+                                            }
                                         }
                                     }
                                 } catch (err) {
