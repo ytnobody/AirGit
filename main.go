@@ -2096,14 +2096,39 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build GitHub Issues URL
-	issuesURL := fmt.Sprintf("https://github.com/%s/%s/issues", owner, repo)
+	// Fetch issues using gh CLI
+	cmd := exec.Command("gh", "issue", "list", "--json", "number,title,body", "-L", "50")
+	cmd.Dir = config.RepoPath
+	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+	
+	var issuesOutput bytes.Buffer
+	cmd.Stdout = &issuesOutput
+	cmd.Stderr = &issuesOutput
+	
+	if err := cmd.Run(); err != nil {
+		log.Printf("gh issue list error: %v", err)
+		// Return empty list if gh fails
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"owner":     owner,
+			"repo":      repo,
+			"remoteUrl": remoteURL,
+			"issues":    []interface{}{},
+		})
+		return
+	}
+
+	// Parse JSON output
+	var issues []map[string]interface{}
+	if err := json.Unmarshal(issuesOutput.Bytes(), &issues); err != nil {
+		log.Printf("parse issues error: %v", err)
+		issues = []map[string]interface{}{}
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"owner":     owner,
 		"repo":      repo,
 		"remoteUrl": remoteURL,
-		"issuesUrl": issuesURL,
+		"issues":    issues,
 	})
 }
 
