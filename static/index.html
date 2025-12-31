@@ -75,10 +75,6 @@
                     <i class="fas fa-cloud text-lg"></i>
                     <span class="text-xs font-medium">Remotes</span>
                 </button>
-                <button id="issues-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
-                    <i class="fas fa-circle-exclamation text-lg"></i>
-                    <span class="text-xs font-medium">Issues</span>
-                </button>
                 <button id="tags-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-tags text-lg"></i>
                     <span class="text-xs font-medium">Tags</span>
@@ -97,16 +93,15 @@
                 <div id="status-container" class="mb-4 hidden"></div>
 
                 <!-- Issues Panel -->
-                <div id="issues-panel" class="hidden flex-1 flex flex-col mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4 overflow-hidden">
+                <div id="issues-panel" class="flex-1 flex flex-col mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4 overflow-hidden">
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-sm font-bold text-sky-600">📋 Issues</h3>
-                        <button id="toggle-issues-btn" class="text-gray-500 hover:text-gray-700 text-sm">✕</button>
                     </div>
                     <div class="mb-2">
                         <input id="issues-search" type="text" placeholder="Search issues..." class="w-full bg-white border border-sky-300 rounded px-2 py-1 text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:border-sky-400">
                     </div>
                     <div id="issues-list" class="flex-1 space-y-1 overflow-y-auto">
-                        <div class="text-center text-gray-600 text-xs py-4">Click Issues button to load</div>
+                        <div class="text-center text-gray-600 text-xs py-4">Loading issues...</div>
                     </div>
                     <div id="issues-error" class="hidden mt-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-xs"></div>
                 </div>
@@ -486,9 +481,7 @@
         const pushTagSubmitBtn = document.getElementById('push-tag-submit');
         const pushTagCloseBtn = document.getElementById('push-tag-close-btn');
         const pushTagError = document.getElementById('push-tag-error');
-        const issuesBtn = document.getElementById('issues-btn');
         const issuesPanel = document.getElementById('issues-panel');
-        const toggleIssuesBtn = document.getElementById('toggle-issues-btn');
         const issuesError = document.getElementById('issues-error');
         let currentIssuesUrl = null;
         let currentEditingRemote = null;
@@ -907,11 +900,8 @@
 
         pushTagSubmitBtn.addEventListener('click', pushTag);
 
-        // GitHub Issues event listeners
-        issuesBtn.addEventListener('click', async () => {
-            issuesPanel.classList.toggle('hidden');
-            if (issuesPanel.classList.contains('hidden')) return;
-            
+        // GitHub Issues - Auto-load on page load
+        async function loadGitHubIssues() {
             issuesError.classList.add('hidden');
             document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-xs py-2">Loading issues...</div>';
             
@@ -948,11 +938,10 @@
                 console.error('Issues load error:', error);
                 showIssuesError('Connection error: ' + error.message);
             }
-        });
+        }
         
-        toggleIssuesBtn.addEventListener('click', () => {
-            issuesPanel.classList.add('hidden');
-        });
+        // Load issues on page load
+        loadGitHubIssues();
         
         function displayFilteredIssues(issuesToDisplay) {
             const issuesList = document.getElementById('issues-list');
