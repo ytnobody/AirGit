@@ -2254,7 +2254,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}
 	agentStatusMutex.Unlock()
 	
-	branchName := fmt.Sprintf("airgit/issue-%d", issueNumber)
+	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, time.Now().Unix())
 	log.Printf("processAgentIssue: branch=%s, repoPath=%s", branchName, config.RepoPath)
 	
 	gitCmd := func(args ...string) error {
@@ -2274,22 +2274,47 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	gitCmd("checkout", "main")
 	gitCmd("pull", "origin", "main")
 	
+	// Delete branch if it already exists
+	gitCmd("branch", "-D", branchName)
+	
 	if err := gitCmd("checkout", "-b", branchName); err != nil {
-		log.Printf("branch creation failed, trying checkout: %v", err)
-		gitCmd("checkout", branchName)
-		gitCmd("pull", "origin", branchName)
+		log.Printf("branch creation failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to create branch: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
 	}
 
-	// Use Copilot CLI to generate implementation
-	log.Printf("Calling Copilot CLI for issue #%d", issueNumber)
-	copilotCmd := exec.Command("gh", "copilot", "issue", strconv.Itoa(issueNumber))
+	// Call copilot to implement the issue
+	log.Printf("Calling copilot for issue #%d", issueNumber)
+	copilotCmd := exec.Command("copilot", "issue", strconv.Itoa(issueNumber))
 	copilotCmd.Dir = config.RepoPath
-	copilotCmd.Env = append(os.Environ(), 
+	copilotCmd.Env = append(os.Environ(),
 		"GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"),
-		"GH_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+		"GH_TOKEN="+os.Getenv("GH_TOKEN"))
 	
 	out, err := copilotCmd.CombinedOutput()
-	log.Printf("Copilot output: err=%v, output=%s", err, string(out))
+	log.Printf("copilot output: err=%v, output=%s", err, string(out))
+	
+	if err != nil {
+		log.Printf("copilot failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Copilot implementation failed: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
 	
 	// Get current branch to push
 	branchCheckCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
