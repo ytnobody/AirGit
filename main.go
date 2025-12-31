@@ -158,6 +158,7 @@ func main() {
 	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
+	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2040,4 +2041,114 @@ func handlePushTag(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{
 		Log: logs,
 	})
+}
+
+func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	// Get GitHub remote URL
+	output, err := executeCommand("git", "config", "--get", "remote.origin.url")
+	if err != nil || strings.TrimSpace(output) == "" {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No GitHub remote found. Make sure 'origin' remote is configured.",
+		})
+		return
+	}
+
+	remoteURL := strings.TrimSpace(output)
+
+	// Parse GitHub URL to extract owner/repo
+	owner, repo := parseGitHubURL(remoteURL)
+	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Could not parse GitHub repository from remote URL: " + remoteURL,
+		})
+		return
+	}
+
+	// Build GitHub Issues URL
+	issuesURL := fmt.Sprintf("https://github.com/%s/%s/issues", owner, repo)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"owner":     owner,
+		"repo":      repo,
+		"remoteUrl": remoteURL,
+		"issuesUrl": issuesURL,
+	})
+}
+
+func parseGitHubURL(remoteURL string) (owner, repo string) {
+	// Handle both HTTPS and SSH URLs
+	remoteURL = strings.TrimSpace(remoteURL)
+
+	// SSH: git@github.com:owner/repo.git
+	if strings.HasPrefix(remoteURL, "git@github.com:") {
+		parts := strings.TrimPrefix(remoteURL, "git@github.com:")
+		parts = strings.TrimSuffix(parts, ".git")
+		elements := strings.Split(parts, "/")
+		if len(elements) >= 2 {
+			return elements[0], elements[1]
+		}
+	}
+
+	// HTTPS: https://github.com/owner/repo.git
+	if strings.Contains(remoteURL, "github.com") {
+		parts := strings.Split(remoteURL, "/")
+		if len(parts) >= 2 {
+			repo = strings.TrimSuffix(parts[len(parts)-1], ".git")
+			owner = parts[len(parts)-2]
+			if owner != "" && repo != "" {
+				return owner, repo
+			}
+		}
+	}
+
+	return "", ""
+}
+
+func executeCommand(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = config.RepoPath
+
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	err := cmd.Run()
+
+	result := strings.TrimSpace(output.String())
+
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
 }

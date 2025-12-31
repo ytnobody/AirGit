@@ -75,6 +75,10 @@
                     <i class="fas fa-cloud text-lg"></i>
                     <span class="text-xs font-medium">Remotes</span>
                 </button>
+                <button id="issues-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
+                    <i class="fas fa-circle-exclamation text-lg"></i>
+                    <span class="text-xs font-medium">Issues</span>
+                </button>
                 <button id="tags-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-tags text-lg"></i>
                     <span class="text-xs font-medium">Tags</span>
@@ -322,6 +326,26 @@
             </div>
         </div>
 
+        <!-- GitHub Issues Modal (Opens GitHub directly) -->
+        <div id="issues-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">📋 Repository Issues</h2>
+                <div id="issues-info" class="mb-6 space-y-2">
+                    <div class="text-sm text-gray-700">
+                        <span class="font-semibold">Repository:</span> <span id="issues-repo-name" class="text-sky-600">Loading...</span>
+                    </div>
+                    <div class="text-sm text-gray-700">
+                        <span class="font-semibold">Remote:</span> <span id="issues-remote-url" class="text-gray-600 text-xs truncate">Loading...</span>
+                    </div>
+                </div>
+                <div id="issues-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="issues-open-github-btn" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🐙 Open on GitHub</button>
+                    <button id="issues-modal-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Create Tag Modal -->
         <div id="create-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
@@ -466,6 +490,14 @@
         const pushTagSubmitBtn = document.getElementById('push-tag-submit');
         const pushTagCloseBtn = document.getElementById('push-tag-close-btn');
         const pushTagError = document.getElementById('push-tag-error');
+        const issuesBtn = document.getElementById('issues-btn');
+        const issuesModal = document.getElementById('issues-modal');
+        const issuesRepoName = document.getElementById('issues-repo-name');
+        const issuesRemoteUrl = document.getElementById('issues-remote-url');
+        const issuesError = document.getElementById('issues-error');
+        const issuesOpenGitHubBtn = document.getElementById('issues-open-github-btn');
+        const issuesModalCloseBtn = document.getElementById('issues-modal-close-btn');
+        let currentIssuesUrl = null;
         let currentEditingRemote = null;
         let selectedTagForPush = null;
 
@@ -708,6 +740,16 @@
             return div.innerHTML;
         }
 
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-sky-600 text-white px-4 py-3 rounded-lg shadow-lg max-w-xs z-50';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
         function displayAheadBehind(ahead, behind) {
             if (ahead === 0 && behind === 0) {
                 trackingInfo.classList.add('hidden');
@@ -870,6 +912,64 @@
         });
 
         pushTagSubmitBtn.addEventListener('click', pushTag);
+
+        // GitHub Issues event listeners
+        issuesBtn.addEventListener('click', async () => {
+            issuesModal.classList.remove('hidden');
+            issuesError.classList.add('hidden');
+            issuesRepoName.textContent = 'Loading...';
+            issuesRemoteUrl.textContent = 'Loading...';
+            
+            // Fetch current repository's GitHub issues URL
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/github/issues', window.location.origin);
+                
+                // If no specific repo path, use AirGit itself
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                } else {
+                    url.searchParams.append('repoPath', '/home/ytnobody/AirGit');
+                }
+                
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                
+                if (response.ok && data.issuesUrl) {
+                    issuesRepoName.textContent = `${data.owner}/${data.repo}`;
+                    issuesRemoteUrl.textContent = data.remoteUrl;
+                    currentIssuesUrl = data.issuesUrl;
+                } else {
+                    showIssuesError(data.error || 'Could not detect GitHub repository');
+                }
+            } catch (error) {
+                console.error('Issues load error:', error);
+                showIssuesError('Connection error: ' + error.message);
+            }
+        });
+
+        issuesModalCloseBtn.addEventListener('click', () => {
+            issuesModal.classList.add('hidden');
+        });
+
+        issuesModal.addEventListener('click', (e) => {
+            if (e.target === issuesModal) {
+                issuesModal.classList.add('hidden');
+            }
+        });
+
+        issuesOpenGitHubBtn.addEventListener('click', () => {
+            if (currentIssuesUrl) {
+                window.open(currentIssuesUrl, '_blank');
+            }
+        });
+
+        function showIssuesError(message) {
+            issuesError.textContent = message;
+            issuesError.classList.remove('hidden');
+            issuesRepoName.textContent = 'Error';
+            issuesRemoteUrl.textContent = '';
+        }
 
         createBranchSubmitBtn.addEventListener('click', createBranch);
 
@@ -1128,6 +1228,126 @@
                 pushTagError.classList.remove('hidden');
             } finally {
                 pushTagSubmitBtn.disabled = false;
+            }
+        }
+
+        async function loadGitHubIssues() {
+            const owner = issuesOwnerInput.value.trim();
+            const repo = issuesRepoInput.value.trim();
+
+            if (!owner || !repo) {
+                issuesList.innerHTML = '<div class="text-center text-red-400 text-sm">Please enter owner and repository name</div>';
+                return;
+            }
+
+            issuesLoadBtn.disabled = true;
+            issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">Loading...</div>';
+
+            try {
+                const url = new URL('/api/github/issues', window.location.origin);
+                url.searchParams.append('owner', owner);
+                url.searchParams.append('repo', repo);
+
+                const response = await fetch(url.toString());
+                const data = await response.json();
+
+                if (response.ok && data.issues) {
+                    displayGitHubIssues(data.issues, owner, repo);
+                } else if (data.error) {
+                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
+                } else {
+                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load issues</div>`;
+                }
+            } catch (error) {
+                console.error('Issues load error:', error);
+                issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
+            } finally {
+                issuesLoadBtn.disabled = false;
+            }
+        }
+
+        function displayGitHubIssues(issues, owner, repo) {
+            if (issues.length === 0) {
+                issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">No issues found</div>';
+                return;
+            }
+
+            // Store issues data for later use
+            issuesList.dataset.allIssues = JSON.stringify(issues);
+
+            issuesList.innerHTML = issues.map(issue => `
+                <button class="w-full text-left bg-sky-100 hover:bg-sky-200 px-4 py-3 rounded text-gray-700 text-sm transition-colors"
+                        onclick="openIssueDetail(${issue.number}, '${escapeHtml(owner)}', '${escapeHtml(repo)}', '${escapeHtml(issue.title)}')">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1">
+                            <div class="font-semibold text-sky-600">#${issue.number} ${escapeHtml(issue.title)}</div>
+                            <div class="text-xs text-gray-600 mt-1 line-clamp-2">${escapeHtml(issue.body || '(No description)')}</div>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded ${issue.state === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}">
+                            ${issue.state === 'OPEN' ? 'Open' : 'Closed'}
+                        </span>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        function openIssueDetail(issueNumber, owner, repo, title) {
+            currentIssueData = { issueNumber, owner, repo, title };
+            issueDetailTitle.innerHTML = `<span class="text-sky-600">#${issueNumber}</span> ${escapeHtml(title)}`;
+            
+            // Find the full issue data to show body
+            const allIssues = JSON.parse(issuesList.dataset.allIssues || '[]');
+            const fullIssue = allIssues.find(i => i.number === issueNumber);
+            
+            if (fullIssue && fullIssue.body) {
+                issueDetailBody.textContent = fullIssue.body;
+            } else {
+                issueDetailBody.textContent = '(No description)';
+            }
+            
+            issuesModal.classList.add('hidden');
+            issueDetailModal.classList.remove('hidden');
+        }
+
+        async function triggerGitHubAgent() {
+            if (!currentIssueData) {
+                showNotification('No issue selected');
+                return;
+            }
+
+            const { issueNumber, owner, repo, title } = currentIssueData;
+            
+            issueTriggerAgentBtn.disabled = true;
+            issueTriggerAgentBtn.textContent = '⏳ Triggering...';
+
+            try {
+                const url = new URL('/api/github/comment', window.location.origin);
+                url.searchParams.append('owner', owner);
+                url.searchParams.append('repo', repo);
+                url.searchParams.append('issue', issueNumber);
+
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        body: '/airgit run'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showNotification('✓ Agent triggered! GitHub Actions will start soon.');
+                    issueDetailModal.classList.add('hidden');
+                } else {
+                    showNotification('✗ Failed to trigger agent: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Agent trigger error:', error);
+                showNotification('✗ Error: ' + error.message);
+            } finally {
+                issueTriggerAgentBtn.disabled = false;
+                issueTriggerAgentBtn.textContent = '🤖 Trigger Agent';
             }
         }
 
