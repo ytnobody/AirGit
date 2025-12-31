@@ -2315,10 +2315,17 @@ Requirements:
 	}
 	defer os.Remove(promptFile)
 	
+<<<<<<< HEAD
 	// Use Copilot CLI with /delegate via stdin
 	copilotCmd := exec.Command("copilot", "/delegate")
 	copilotCmd.Dir = config.RepoPath
 	copilotCmd.Stdin = strings.NewReader(prompt)
+=======
+	// Use Copilot CLI with the prompt file via stdin
+	copilotCmd := exec.Command("sh", "-c", fmt.Sprintf("cat %s | copilot /delegate", promptFile))
+	copilotCmd.Dir = config.RepoPath
+	copilotCmd.Env = append(os.Environ(), fmt.Sprintf("GH_TOKEN=%s", os.Getenv("GH_TOKEN")))
+>>>>>>> 77b133c81c90bb4ddab0f496f0a00168d884e0be
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
