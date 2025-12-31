@@ -2351,11 +2351,9 @@ The Copilot CLI will implement the solution based on the issue description.
 	log.Printf("Invoking Copilot CLI with /delegate command for issue #%d", issueNumber)
 	
 	// Use copilot /delegate to generate implementation
-	copilotCmd := exec.Command("copilot", "/delegate", "--prompt", prompt)
+	copilotCmd := exec.Command("node", "--input-type=module", "/usr/local/lib/node_modules/@github/copilot/index.js", "/delegate", "--prompt", prompt)
 	copilotCmd.Dir = worktreePath
-	env := os.Environ()
-	env = append(env, "NODE_OPTIONS=--input-type=module")
-	copilotCmd.Env = env
+	copilotCmd.Env = os.Environ()
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
