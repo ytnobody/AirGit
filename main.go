@@ -158,6 +158,8 @@ func main() {
 	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
+	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/comment", handlePostGitHubComment)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2040,4 +2042,116 @@ func handlePushTag(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{
 		Log: logs,
 	})
+}
+
+func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	owner := r.URL.Query().Get("owner")
+	repo := r.URL.Query().Get("repo")
+
+	if owner == "" || repo == "" {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "owner and repo query parameters are required",
+		})
+		return
+	}
+
+	// Use gh command to list issues
+	output, err := executeCommand("gh", "issue", "list", "-R", owner+"/"+repo, "--json", "number,title,state,body")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to fetch issues: %v", err),
+		})
+		return
+	}
+
+	var issues []map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &issues); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to parse issues: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"issues": issues,
+	})
+}
+
+func handlePostGitHubComment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	owner := r.URL.Query().Get("owner")
+	repo := r.URL.Query().Get("repo")
+	issue := r.URL.Query().Get("issue")
+
+	if owner == "" || repo == "" || issue == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "owner, repo, and issue query parameters are required",
+		})
+		return
+	}
+
+	var req struct {
+		Body string `json:"body"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	if req.Body == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Comment body is required",
+		})
+		return
+	}
+
+	// Use gh command to post comment
+	output, err := executeCommand("gh", "issue", "comment", issue, "-R", owner+"/"+repo, "-b", req.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to post comment: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Comment posted successfully",
+		"output":  output,
+	})
+}
+
+func executeCommand(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	err := cmd.Run()
+
+	result := strings.TrimSpace(output.String())
+
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
 }

@@ -75,6 +75,10 @@
                     <i class="fas fa-cloud text-lg"></i>
                     <span class="text-xs font-medium">Remotes</span>
                 </button>
+                <button id="issues-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
+                    <i class="fas fa-circle-exclamation text-lg"></i>
+                    <span class="text-xs font-medium">Issues</span>
+                </button>
                 <button id="tags-btn" class="flex flex-col items-center gap-1 px-4 py-3 rounded text-gray-600 hover:text-sky-600 hover:bg-sky-100 transition-all duration-200">
                     <i class="fas fa-tags text-lg"></i>
                     <span class="text-xs font-medium">Tags</span>
@@ -322,6 +326,22 @@
             </div>
         </div>
 
+        <!-- GitHub Issues Modal -->
+        <div id="issues-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">GitHub Issues</h2>
+                <div class="space-y-2 mb-4">
+                    <input id="issues-owner-input" type="text" placeholder="owner" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                    <input id="issues-repo-input" type="text" placeholder="repository" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                    <button id="issues-load-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Load Issues</button>
+                </div>
+                <div id="issues-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
+                    <div class="text-center text-gray-600 text-sm">Enter owner/repo and click Load</div>
+                </div>
+                <button id="issues-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
+            </div>
+        </div>
+
         <!-- Create Tag Modal -->
         <div id="create-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
@@ -466,6 +486,13 @@
         const pushTagSubmitBtn = document.getElementById('push-tag-submit');
         const pushTagCloseBtn = document.getElementById('push-tag-close-btn');
         const pushTagError = document.getElementById('push-tag-error');
+        const issuesBtn = document.getElementById('issues-btn');
+        const issuesModal = document.getElementById('issues-modal');
+        const issuesOwnerInput = document.getElementById('issues-owner-input');
+        const issuesRepoInput = document.getElementById('issues-repo-input');
+        const issuesLoadBtn = document.getElementById('issues-load-btn');
+        const issuesList = document.getElementById('issues-list');
+        const issuesModalCloseBtn = document.getElementById('issues-modal-close-btn');
         let currentEditingRemote = null;
         let selectedTagForPush = null;
 
@@ -708,6 +735,16 @@
             return div.innerHTML;
         }
 
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-sky-600 text-white px-4 py-3 rounded-lg shadow-lg max-w-xs z-50';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
         function displayAheadBehind(ahead, behind) {
             if (ahead === 0 && behind === 0) {
                 trackingInfo.classList.add('hidden');
@@ -870,6 +907,36 @@
         });
 
         pushTagSubmitBtn.addEventListener('click', pushTag);
+
+        // GitHub Issues event listeners
+        issuesBtn.addEventListener('click', () => {
+            issuesModal.classList.remove('hidden');
+            // Try to get owner/repo from current location or use defaults
+            const pathname = window.location.pathname;
+            if (!issuesOwnerInput.value && !issuesRepoInput.value) {
+                // Could be pre-populated from localStorage or environment
+                issuesOwnerInput.focus();
+            }
+        });
+
+        issuesModalCloseBtn.addEventListener('click', () => {
+            issuesModal.classList.add('hidden');
+        });
+
+        issuesModal.addEventListener('click', (e) => {
+            if (e.target === issuesModal) {
+                issuesModal.classList.add('hidden');
+            }
+        });
+
+        issuesLoadBtn.addEventListener('click', loadGitHubIssues);
+
+        // Allow Enter to load issues
+        issuesRepoInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadGitHubIssues();
+            }
+        });
 
         createBranchSubmitBtn.addEventListener('click', createBranch);
 
@@ -1129,6 +1196,69 @@
             } finally {
                 pushTagSubmitBtn.disabled = false;
             }
+        }
+
+        async function loadGitHubIssues() {
+            const owner = issuesOwnerInput.value.trim();
+            const repo = issuesRepoInput.value.trim();
+
+            if (!owner || !repo) {
+                issuesList.innerHTML = '<div class="text-center text-red-400 text-sm">Please enter owner and repository name</div>';
+                return;
+            }
+
+            issuesLoadBtn.disabled = true;
+            issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">Loading...</div>';
+
+            try {
+                const url = new URL('/api/github/issues', window.location.origin);
+                url.searchParams.append('owner', owner);
+                url.searchParams.append('repo', repo);
+
+                const response = await fetch(url.toString());
+                const data = await response.json();
+
+                if (response.ok && data.issues) {
+                    displayGitHubIssues(data.issues, owner, repo);
+                } else if (data.error) {
+                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
+                } else {
+                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load issues</div>`;
+                }
+            } catch (error) {
+                console.error('Issues load error:', error);
+                issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
+            } finally {
+                issuesLoadBtn.disabled = false;
+            }
+        }
+
+        function displayGitHubIssues(issues, owner, repo) {
+            if (issues.length === 0) {
+                issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">No issues found</div>';
+                return;
+            }
+
+            issuesList.innerHTML = issues.map(issue => `
+                <button class="w-full text-left bg-sky-100 hover:bg-sky-200 px-4 py-3 rounded text-gray-700 text-sm transition-colors"
+                        onclick="openIssueDetail(${issue.number}, '${escapeHtml(owner)}', '${escapeHtml(repo)}', '${escapeHtml(issue.title)}')">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1">
+                            <div class="font-semibold text-sky-600">#${issue.number} ${escapeHtml(issue.title)}</div>
+                            <div class="text-xs text-gray-600 mt-1 line-clamp-2">${escapeHtml(issue.body || '(No description)')}</div>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded ${issue.state === 'OPEN' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}">
+                            ${issue.state === 'OPEN' ? 'Open' : 'Closed'}
+                        </span>
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        function openIssueDetail(issueNumber, owner, repo, title) {
+            // For now, just show a notification
+            // This could open a detailed modal or trigger the agent
+            showNotification(`Viewing Issue #${issueNumber}: ${title}`);
         }
 
         async function loadRemotes() {
