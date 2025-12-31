@@ -793,3 +793,45 @@ Local Git Repositories & Systemd User Services
 ## License
 
 MIT
+
+## Setup AI Agent Workflow
+
+To enable the AI Agent functionality in any Git repository:
+
+### Quick Setup
+
+```bash
+# 1. Create workflows directory
+mkdir -p .github/workflows
+
+# 2. Copy the agent workflow
+curl -s https://raw.githubusercontent.com/ytnobody/AirGit/feature/github-agent-integration/.github/workflows/agent.yml > .github/workflows/agent.yml
+
+# 3. Commit and push
+git add .github/workflows/agent.yml
+git commit -m "feat: Add AI Agent workflow"
+git push
+```
+
+### Usage
+
+1. Create or open an issue in your repository
+2. Add a comment with `/airgit run`
+3. GitHub Actions will automatically:
+   - Create a feature branch (airgit/issue-<NUMBER>)
+   - Generate code changes
+   - Create a Pull Request
+   - Post status updates
+
+### Customization
+
+To change the trigger command, modify the `if:` condition in `.github/workflows/agent.yml`:
+
+```yaml
+if: contains(github.event.comment.body, '/my-command run')
+```
+
+### Integration with Multiple Repositories
+
+The workflow can be used in any GitHub repository. Simply copy the workflow file and customize as needed for your project.
+
