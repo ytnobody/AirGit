@@ -2280,66 +2280,71 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		gitCmd("pull", "origin", branchName)
 	}
 
-	// Use Copilot CLI to generate implementation
-	log.Printf("Calling Copilot CLI for issue #%d", issueNumber)
-	copilotCmd := exec.Command("copilot", "issue", strconv.Itoa(issueNumber))
+	// Create prompt for Copilot CLI
+	prompt := fmt.Sprintf(`Please implement the solution for GitHub issue #%d.
+
+Issue Title: %s
+
+Issue Description:
+%s
+
+Requirements:
+1. Create a proper implementation to solve this issue
+2. Write clean, production-ready code
+3. Follow the existing code style in the repository
+4. Add tests if appropriate
+5. Update documentation if needed`, issueNumber, issueTitle, issueBody)
+
+	log.Printf("Invoking Copilot CLI with /delegate command")
+	log.Printf("Prompt: %s", prompt)
+	
+	// Use Copilot CLI's /delegate command to create a PR
+	// The /delegate command reads from stdin
+	copilotCmd := exec.Command("copilot", "/delegate")
 	copilotCmd.Dir = config.RepoPath
-	copilotCmd.Env = append(os.Environ(), 
-		"GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"),
-		"GH_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+	copilotCmd.Stdin = bytes.NewBufferString(prompt)
 	
-	out, err := copilotCmd.CombinedOutput()
-	log.Printf("Copilot output: err=%v, output=%s", err, string(out))
+	var copilotOut bytes.Buffer
+	var copilotErr bytes.Buffer
+	copilotCmd.Stdout = &copilotOut
+	copilotCmd.Stderr = &copilotErr
 	
-	// Get current branch to push
-	branchCheckCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	branchCheckCmd.Dir = config.RepoPath
-	currentBranchOut, _ := branchCheckCmd.Output()
-	currentBranch := strings.TrimSpace(string(currentBranchOut))
-	log.Printf("Current branch after copilot: %s", currentBranch)
+	err := copilotCmd.Run()
+	copilotOutput := copilotOut.String()
+	copilotError := copilotErr.String()
 	
-	prNumber := 0
-	statusMsg := "Completed"
-	statusStr := "completed"
+	log.Printf("Copilot output: %s", copilotOutput)
+	log.Printf("Copilot error: %s", copilotError)
 	
-	// Push the branch
-	if currentBranch != "" {
-		gitCmd("push", "-u", "origin", currentBranch)
-		
-		// Create PR
-		prCmd := exec.Command("gh", "pr", "create",
-			"--title", fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle),
-			"--body", fmt.Sprintf("Solution for issue #%d\n\n%s", issueNumber, issueBody),
-			"--head", currentBranch,
-			"--base", "main")
-		prCmd.Dir = config.RepoPath
-		prCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
-		
-		prOut, prErr := prCmd.CombinedOutput()
-		log.Printf("PR creation: err=%v, output=%s", prErr, string(prOut))
-		
-		if prErr == nil {
-			// Parse PR number from output
-			prOutput := string(prOut)
-			if strings.Contains(prOutput, "https://github.com") {
-				// Extract PR number from URL
-				parts := strings.Split(prOutput, "/pull/")
-				if len(parts) > 1 {
-					prStr := strings.Fields(parts[1])[0]
-					if num, err := strconv.Atoi(prStr); err == nil {
-						prNumber = num
-					}
-				}
-			}
-			statusMsg = fmt.Sprintf("PR created successfully")
-		} else {
-			statusStr = "failed"
-			statusMsg = fmt.Sprintf("PR creation failed: %v", prErr)
+	if err != nil {
+		log.Printf("Copilot CLI error: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Copilot CLI failed: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
 		}
-	} else {
-		statusStr = "failed"
-		statusMsg = "No changes to push"
+		agentStatusMutex.Unlock()
+		return
 	}
+	
+	// Copilot CLI /delegate command creates the PR automatically
+	// Check if PR was created by parsing the output
+	prNumber := 0
+	if strings.Contains(copilotOutput, "https://github.com") {
+		parts := strings.Split(copilotOutput, "/pull/")
+		if len(parts) > 1 {
+			prStr := strings.Fields(parts[1])[0]
+			if num, err := strconv.Atoi(prStr); err == nil {
+				prNumber = num
+			}
+		}
+	}
+	
+	statusMsg := "PR created by Copilot CLI"
+	statusStr := "completed"
 
 	// Update status to completed/failed
 	agentStatusMutex.Lock()
@@ -2347,7 +2352,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		IssueNumber: issueNumber,
 		Status:      statusStr,
 		Message:     statusMsg,
-		StartTime:   time.Now().Add(-1 * time.Minute), // Adjust for demo
+		StartTime:   time.Now().Add(-1 * time.Minute),
 		EndTime:     time.Now(),
 		PRNumber:    prNumber,
 	}
