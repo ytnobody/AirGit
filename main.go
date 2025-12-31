@@ -159,6 +159,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2151,4 +2152,44 @@ func executeCommand(name string, args ...string) (string, error) {
 	}
 
 	return result, nil
+}
+
+func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
+w.Header().Set("Content-Type", "application/json")
+
+if r.Method != http.MethodPost {
+w.WriteHeader(http.StatusMethodNotAllowed)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": "Only POST method is supported",
+})
+return
+}
+
+var payload struct {
+IssueNumber int    `json:"issue_number"`
+IssueTitle  string `json:"issue_title"`
+IssueBody   string `json:"issue_body"`
+Repository  string `json:"repository"`
+Owner       string `json:"owner"`
+Repo        string `json:"repo"`
+}
+
+if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{
+"error": fmt.Sprintf("Invalid payload: %v", err),
+})
+return
+}
+
+log.Printf("Agent trigger received: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+
+json.NewEncoder(w).Encode(map[string]interface{}{
+"success": true,
+"message": fmt.Sprintf("Agent trigger received for issue #%d", payload.IssueNumber),
+"issue": map[string]interface{}{
+"number": payload.IssueNumber,
+"title":  payload.IssueTitle,
+},
+})
 }
