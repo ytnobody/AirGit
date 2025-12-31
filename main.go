@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -2350,20 +2351,37 @@ The Copilot CLI will implement the solution based on the issue description.
 	// Call Copilot CLI to implement the solution
 	log.Printf("Invoking Copilot CLI with /delegate command for issue #%d", issueNumber)
 	
-	// Use copilot /delegate to generate implementation
-	copilotCmd := exec.Command("node", "--input-type", "module", "/usr/local/lib/node_modules/@github/copilot/index.js", "/delegate", "--prompt", prompt)
+	// Create temporary JavaScript file to run copilot
+	tmpFile, err := ioutil.TempFile("", "copilot-*.js")
+	if err != nil {
+		log.Printf("Failed to create temp file: %v", err)
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write copilot command to temp file
+	script := fmt.Sprintf(`import('@github/copilot').then(m => m.execute(['/delegate', '--prompt', %q]))`, prompt)
+	if _, err := tmpFile.WriteString(script); err != nil {
+		log.Printf("Failed to write temp file: %v", err)
+		return
+	}
+	tmpFile.Close()
+
+	// Execute copilot via node with proper module type
+	nodePath := "/usr/local/bin/node"
+	copilotCmd := exec.Command(nodePath, "--input-type=module", tmpFile.Name())
 	copilotCmd.Dir = worktreePath
 	copilotCmd.Env = os.Environ()
-	
+
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
 	copilotCmd.Stdout = &copilotOut
 	copilotCmd.Stderr = &copilotErr
-	
-	err := copilotCmd.Run()
+
+	err = copilotCmd.Run()
 	copilotOutput := copilotOut.String()
 	copilotError := copilotErr.String()
-	
+
 	log.Printf("Copilot output: %s", copilotOutput)
 	log.Printf("Copilot error: %s", copilotError)
 	
