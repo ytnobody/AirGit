@@ -1042,6 +1042,9 @@
                                             btn.classList.add('bg-red-600', 'hover:bg-red-500');
                                             btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
                                             btn.disabled = false;
+                                            if (status.message) {
+                                                showNotification(`✗ Agent failed: ${status.message}`);
+                                            }
                                         }
                                     }
                                 } catch (err) {
