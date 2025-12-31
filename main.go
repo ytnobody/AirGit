@@ -160,6 +160,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
+	http.HandleFunc("/api/agent/process", handleAgentProcess)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2246,4 +2247,35 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	log.Printf("PR creation: err=%v, output=%s", err, string(out))
 
 	log.Printf("processAgentIssue: completed for #%d", issueNumber)
+}
+
+func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
+w.Header().Set("Content-Type", "application/json")
+
+if r.Method != http.MethodPost {
+w.WriteHeader(http.StatusMethodNotAllowed)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
+return
+}
+
+var payload struct {
+IssueNumber int    `json:"issue_number"`
+IssueTitle  string `json:"issue_title"`
+IssueBody   string `json:"issue_body"`
+}
+
+if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+return
+}
+
+log.Printf("Agent process started: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+
+go func() {
+log.Printf("Agent goroutine started for issue #%d", payload.IssueNumber)
+processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
+}()
+
+json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Agent processing started"})
 }
