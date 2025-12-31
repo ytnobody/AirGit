@@ -2157,6 +2157,8 @@ func executeCommand(name string, args ...string) (string, error) {
 func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	log.Printf("handleAgentTrigger called: method=%s", r.Method)
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
@@ -2170,25 +2172,39 @@ func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Printf("handleAgentTrigger: decode error: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
 		return
 	}
 
-	log.Printf("Agent: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+	log.Printf("handleAgentTrigger: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
 
-	go processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
+	go func() {
+		log.Printf("Agent goroutine started for issue #%d", payload.IssueNumber)
+		processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
+	}()
 
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
+	log.Printf("processAgentIssue: starting for #%d", issueNumber)
+	
 	branchName := fmt.Sprintf("airgit/issue-%d", issueNumber)
+	log.Printf("processAgentIssue: branch=%s, repoPath=%s", branchName, config.RepoPath)
 	
 	gitCmd := func(args ...string) error {
+		log.Printf("git: %v", args)
 		cmd := exec.Command("git", args...)
 		cmd.Dir = config.RepoPath
-		return cmd.Run()
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("git error: %v, output: %s", err, string(out))
+		} else {
+			log.Printf("git ok: %s", string(out))
+		}
+		return err
 	}
 
 	gitCmd("fetch", "origin")
@@ -2196,16 +2212,23 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	gitCmd("pull", "origin", "main")
 	
 	if err := gitCmd("checkout", "-b", branchName); err != nil {
+		log.Printf("branch creation failed, trying checkout: %v", err)
 		gitCmd("checkout", branchName)
 		gitCmd("pull", "origin", branchName)
 	}
 
 	solutionFile := filepath.Join(config.RepoPath, fmt.Sprintf(".github/agent/issue-%d.md", issueNumber))
+	log.Printf("creating solution file: %s", solutionFile)
+	
 	os.MkdirAll(filepath.Dir(solutionFile), 0755)
 
 	content := fmt.Sprintf("# Issue #%d\n\n## %s\n\n%s\n\nGenerated: %s",
 		issueNumber, issueTitle, issueBody, time.Now().Format("2006-01-02 15:04:05"))
-	os.WriteFile(solutionFile, []byte(content), 0644)
+	
+	if err := os.WriteFile(solutionFile, []byte(content), 0644); err != nil {
+		log.Printf("write error: %v", err)
+		return
+	}
 
 	gitCmd("add", solutionFile)
 	gitCmd("commit", "-m", fmt.Sprintf("feat: Solution for issue #%d\n\n%s", issueNumber, issueTitle))
@@ -2218,7 +2241,9 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		"--base", "main")
 	cmd.Dir = config.RepoPath
 	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
-	cmd.Run()
+	
+	out, err := cmd.CombinedOutput()
+	log.Printf("PR creation: err=%v, output=%s", err, string(out))
 
-	log.Printf("Agent completed: Issue #%d", issueNumber)
+	log.Printf("processAgentIssue: completed for #%d", issueNumber)
 }
