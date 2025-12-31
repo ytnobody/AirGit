@@ -326,31 +326,22 @@
             </div>
         </div>
 
-        <!-- GitHub Issues Modal -->
+        <!-- GitHub Issues Modal (Opens GitHub directly) -->
         <div id="issues-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
-                <h2 class="text-lg font-bold text-sky-600 mb-4">GitHub Issues</h2>
-                <div class="space-y-2 mb-4">
-                    <input id="issues-owner-input" type="text" placeholder="owner" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
-                    <input id="issues-repo-input" type="text" placeholder="repository" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
-                    <button id="issues-load-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Load Issues</button>
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">📋 Repository Issues</h2>
+                <div id="issues-info" class="mb-6 space-y-2">
+                    <div class="text-sm text-gray-700">
+                        <span class="font-semibold">Repository:</span> <span id="issues-repo-name" class="text-sky-600">Loading...</span>
+                    </div>
+                    <div class="text-sm text-gray-700">
+                        <span class="font-semibold">Remote:</span> <span id="issues-remote-url" class="text-gray-600 text-xs truncate">Loading...</span>
+                    </div>
                 </div>
-                <div id="issues-list" class="flex-1 overflow-y-auto space-y-2 mb-4">
-                    <div class="text-center text-gray-600 text-sm">Enter owner/repo and click Load</div>
-                </div>
-                <button id="issues-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
-            </div>
-        </div>
-
-        <!-- GitHub Issue Detail Modal -->
-        <div id="issue-detail-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
-                <h2 id="issue-detail-title" class="text-lg font-bold text-sky-600 mb-2"></h2>
-                <div id="issue-detail-body" class="flex-1 overflow-y-auto text-sm text-gray-700 mb-4 bg-white p-3 rounded border border-sky-200">
-                </div>
-                <div class="space-y-2">
-                    <button id="issue-trigger-agent-btn" class="w-full bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🤖 Trigger Agent</button>
-                    <button id="issue-detail-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
+                <div id="issues-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="issues-open-github-btn" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🐙 Open on GitHub</button>
+                    <button id="issues-modal-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
                 </div>
             </div>
         </div>
@@ -501,17 +492,12 @@
         const pushTagError = document.getElementById('push-tag-error');
         const issuesBtn = document.getElementById('issues-btn');
         const issuesModal = document.getElementById('issues-modal');
-        const issuesOwnerInput = document.getElementById('issues-owner-input');
-        const issuesRepoInput = document.getElementById('issues-repo-input');
-        const issuesLoadBtn = document.getElementById('issues-load-btn');
-        const issuesList = document.getElementById('issues-list');
+        const issuesRepoName = document.getElementById('issues-repo-name');
+        const issuesRemoteUrl = document.getElementById('issues-remote-url');
+        const issuesError = document.getElementById('issues-error');
+        const issuesOpenGitHubBtn = document.getElementById('issues-open-github-btn');
         const issuesModalCloseBtn = document.getElementById('issues-modal-close-btn');
-        const issueDetailModal = document.getElementById('issue-detail-modal');
-        const issueDetailTitle = document.getElementById('issue-detail-title');
-        const issueDetailBody = document.getElementById('issue-detail-body');
-        const issueTriggerAgentBtn = document.getElementById('issue-trigger-agent-btn');
-        const issueDetailCloseBtn = document.getElementById('issue-detail-close-btn');
-        let currentIssueData = null;
+        let currentIssuesUrl = null;
         let currentEditingRemote = null;
         let selectedTagForPush = null;
 
@@ -928,13 +914,33 @@
         pushTagSubmitBtn.addEventListener('click', pushTag);
 
         // GitHub Issues event listeners
-        issuesBtn.addEventListener('click', () => {
+        issuesBtn.addEventListener('click', async () => {
             issuesModal.classList.remove('hidden');
-            // Try to get owner/repo from current location or use defaults
-            const pathname = window.location.pathname;
-            if (!issuesOwnerInput.value && !issuesRepoInput.value) {
-                // Could be pre-populated from localStorage or environment
-                issuesOwnerInput.focus();
+            issuesError.classList.add('hidden');
+            issuesRepoName.textContent = 'Loading...';
+            issuesRemoteUrl.textContent = 'Loading...';
+            
+            // Fetch current repository's GitHub issues URL
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/github/issues', window.location.origin);
+                if (repoPath) {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+                
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                
+                if (response.ok && data.issuesUrl) {
+                    issuesRepoName.textContent = `${data.owner}/${data.repo}`;
+                    issuesRemoteUrl.textContent = data.remoteUrl;
+                    currentIssuesUrl = data.issuesUrl;
+                } else {
+                    showIssuesError(data.error || 'Could not detect GitHub repository');
+                }
+            } catch (error) {
+                console.error('Issues load error:', error);
+                showIssuesError('Connection error: ' + error.message);
             }
         });
 
@@ -948,29 +954,18 @@
             }
         });
 
-        issuesLoadBtn.addEventListener('click', loadGitHubIssues);
-
-        // Allow Enter to load issues
-        issuesRepoInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                loadGitHubIssues();
+        issuesOpenGitHubBtn.addEventListener('click', () => {
+            if (currentIssuesUrl) {
+                window.open(currentIssuesUrl, '_blank');
             }
         });
 
-        // Issue detail modal event listeners
-        issueDetailCloseBtn.addEventListener('click', () => {
-            issueDetailModal.classList.add('hidden');
-            issuesModal.classList.remove('hidden');
-        });
-
-        issueDetailModal.addEventListener('click', (e) => {
-            if (e.target === issueDetailModal) {
-                issueDetailModal.classList.add('hidden');
-                issuesModal.classList.remove('hidden');
-            }
-        });
-
-        issueTriggerAgentBtn.addEventListener('click', triggerGitHubAgent);
+        function showIssuesError(message) {
+            issuesError.textContent = message;
+            issuesError.classList.remove('hidden');
+            issuesRepoName.textContent = 'Error';
+            issuesRemoteUrl.textContent = '';
+        }
 
         createBranchSubmitBtn.addEventListener('click', createBranch);
 

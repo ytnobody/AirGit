@@ -159,7 +159,6 @@ func main() {
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
-	http.HandleFunc("/api/github/comment", handlePostGitHubComment)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2047,95 +2046,92 @@ func handlePushTag(w http.ResponseWriter, r *http.Request) {
 func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	owner := r.URL.Query().Get("owner")
-	repo := r.URL.Query().Get("repo")
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
 
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	// Get GitHub remote URL
+	output, err := executeCommand("git", "config", "--get", "remote.origin.url")
+	if err != nil || strings.TrimSpace(output) == "" {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No GitHub remote found. Make sure 'origin' remote is configured.",
+		})
+		return
+	}
+
+	remoteURL := strings.TrimSpace(output)
+
+	// Parse GitHub URL to extract owner/repo
+	owner, repo := parseGitHubURL(remoteURL)
 	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "owner and repo query parameters are required",
+			"error": "Could not parse GitHub repository from remote URL: " + remoteURL,
 		})
 		return
 	}
 
-	// Use gh command to list issues
-	output, err := executeCommand("gh", "issue", "list", "-R", owner+"/"+repo, "--json", "number,title,state,body")
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": fmt.Sprintf("Failed to fetch issues: %v", err),
-		})
-		return
-	}
-
-	var issues []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &issues); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": fmt.Sprintf("Failed to parse issues: %v", err),
-		})
-		return
-	}
+	// Build GitHub Issues URL
+	issuesURL := fmt.Sprintf("https://github.com/%s/%s/issues", owner, repo)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"issues": issues,
+		"owner":     owner,
+		"repo":      repo,
+		"remoteUrl": remoteURL,
+		"issuesUrl": issuesURL,
 	})
 }
 
-func handlePostGitHubComment(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
+func parseGitHubURL(remoteURL string) (owner, repo string) {
+	// Handle both HTTPS and SSH URLs
+	remoteURL = strings.TrimSpace(remoteURL)
+
+	// SSH: git@github.com:owner/repo.git
+	if strings.HasPrefix(remoteURL, "git@github.com:") {
+		parts := strings.TrimPrefix(remoteURL, "git@github.com:")
+		parts = strings.TrimSuffix(parts, ".git")
+		elements := strings.Split(parts, "/")
+		if len(elements) >= 2 {
+			return elements[0], elements[1]
+		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	owner := r.URL.Query().Get("owner")
-	repo := r.URL.Query().Get("repo")
-	issue := r.URL.Query().Get("issue")
-
-	if owner == "" || repo == "" || issue == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "owner, repo, and issue query parameters are required",
-		})
-		return
+	// HTTPS: https://github.com/owner/repo.git
+	if strings.Contains(remoteURL, "github.com") {
+		parts := strings.Split(remoteURL, "/")
+		if len(parts) >= 2 {
+			repo = strings.TrimSuffix(parts[len(parts)-1], ".git")
+			owner = parts[len(parts)-2]
+			if owner != "" && repo != "" {
+				return owner, repo
+			}
+		}
 	}
 
-	var req struct {
-		Body string `json:"body"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Invalid request body",
-		})
-		return
-	}
-
-	if req.Body == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": "Comment body is required",
-		})
-		return
-	}
-
-	// Use gh command to post comment
-	output, err := executeCommand("gh", "issue", "comment", issue, "-R", owner+"/"+repo, "-b", req.Body)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": fmt.Sprintf("Failed to post comment: %v", err),
-		})
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Comment posted successfully",
-		"output":  output,
-	})
+	return "", ""
 }
 
 func executeCommand(name string, args ...string) (string, error) {
