@@ -957,12 +957,17 @@
             
             // Limit to 10 issues
             const limitedIssues = issuesToDisplay.slice(0, 10);
-            issuesList.innerHTML = limitedIssues.map(issue => `
+            issuesList.innerHTML = limitedIssues.map(issue => {
+                const assigneeNames = (issue.assignees && Array.isArray(issue.assignees)) 
+                    ? issue.assignees.map(a => a.login || a).join(', ')
+                    : '';
+                return `
                 <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">
                     <div class="flex justify-between items-start gap-2">
                         <div class="flex-1">
                             <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
                             <div class="text-xs text-gray-500 mt-1">Author: ${(issue.author && issue.author.login) ? issue.author.login : (typeof issue.author === 'string' ? issue.author : 'unknown')}</div>
+                            ${assigneeNames ? `<div class="text-xs text-gray-500">Assignee: ${assigneeNames}</div>` : ''}
                             <div class="text-xs text-gray-600 mt-1">${(issue.body || '').substring(0, 80)}${(issue.body || '').length > 80 ? '...' : ''}</div>
                         </div>
                         <button class="agent-run-btn bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1 rounded transition-colors whitespace-nowrap" data-issue-number="${issue.number}" data-issue-title="${issue.title.replace(/"/g, '&quot;')}" data-issue-body="${(issue.body || '').replace(/"/g, '&quot;')}">
@@ -970,7 +975,8 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
+            
             
             if (issuesToDisplay.length > 10) {
                 issuesList.innerHTML += `<div class="text-center text-gray-500 text-xs py-2">Showing 10 of ${issuesToDisplay.length} issues</div>`;
@@ -1025,6 +1031,10 @@
                 const title = (issue.title || '').toLowerCase();
                 const authorStr = (issue.author && issue.author.login) ? issue.author.login : (typeof issue.author === 'string' ? issue.author : '');
                 const author = authorStr.toLowerCase();
+                const assigneeStr = (issue.assignees && Array.isArray(issue.assignees))
+                    ? issue.assignees.map(a => a.login || a).join(' ')
+                    : '';
+                const assignee = assigneeStr.toLowerCase();
                 const body = (issue.body || '').toLowerCase();
                 
                 // Check for number match (#123)
@@ -1032,8 +1042,8 @@
                     return number.includes(query.substring(1));
                 }
                 
-                // Freeword search in title, author, and body
-                return title.includes(query) || author.includes(query) || body.includes(query);
+                // Freeword search in title, author, assignee, and body
+                return title.includes(query) || author.includes(query) || assignee.includes(query) || body.includes(query);
             });
             
             displayFilteredIssues(filtered);
