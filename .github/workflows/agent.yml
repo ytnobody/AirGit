@@ -42,8 +42,13 @@ jobs:
         run: |
           ISSUE_NUMBER=${{ github.event.issue.number }}
           
-          # Use the airgit-agent.sh script for analysis
-          bash scripts/airgit-agent.sh . "$ISSUE_NUMBER"
+          # Check if scripts/airgit-agent.sh exists
+          if [ -f "scripts/airgit-agent.sh" ]; then
+            bash scripts/airgit-agent.sh . "$ISSUE_NUMBER"
+          else
+            echo "No agent script found, using basic analysis"
+            gh issue view "$ISSUE_NUMBER" --json title,body
+          fi
 
       - name: Create commit with generated changes
         run: |
