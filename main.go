@@ -2298,11 +2298,30 @@ Requirements:
 	log.Printf("Invoking Copilot CLI with /delegate command")
 	log.Printf("Prompt: %s", prompt)
 	
-	// Use Copilot CLI's /delegate command to create a PR
-	// The /delegate command reads from stdin
-	copilotCmd := exec.Command("copilot", "/delegate")
+	// Save prompt to temporary file
+	promptFile := filepath.Join(config.RepoPath, fmt.Sprintf(".copilot-prompt-%d.txt", issueNumber))
+	if err := os.WriteFile(promptFile, []byte(prompt), 0644); err != nil {
+		log.Printf("Failed to write prompt file: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to write prompt file: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+	defer os.Remove(promptFile)
+	
+	// Use Copilot CLI with the prompt file
+	copilotCmd := exec.Command("copilot", "/delegate", "<", promptFile)
 	copilotCmd.Dir = config.RepoPath
-	copilotCmd.Stdin = bytes.NewBufferString(prompt)
+	
+	// Read prompt from stdin instead
+	copilotCmd = exec.Command("sh", "-c", fmt.Sprintf("cat %s | copilot /delegate", promptFile))
+	copilotCmd.Dir = config.RepoPath
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
