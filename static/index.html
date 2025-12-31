@@ -96,6 +96,7 @@
                 <div id="issues-panel" class="flex-1 flex flex-col mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4 overflow-hidden">
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-sm font-bold text-sky-600">📋 Issues</h3>
+                        <button id="issues-refresh-btn" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Refresh issues">🔄</button>
                     </div>
                     <div class="mb-2">
                         <input id="issues-search" type="text" placeholder="Search issues..." class="w-full bg-white border border-sky-300 rounded px-2 py-1 text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:border-sky-400">
@@ -1054,6 +1055,19 @@
             });
             
             displayFilteredIssues(filtered);
+        });
+
+        // Refresh button listener
+        document.getElementById('issues-refresh-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('issues-refresh-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            try {
+                await loadGitHubIssues();
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄';
+            }
         });
 
         function showIssuesError(message) {
