@@ -2136,6 +2136,7 @@ func parseGitHubURL(remoteURL string) (owner, repo string) {
 
 func executeCommand(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
+	cmd.Dir = config.RepoPath
 
 	var output bytes.Buffer
 	cmd.Stdout = &output

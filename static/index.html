@@ -924,8 +924,12 @@
             try {
                 const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/github/issues', window.location.origin);
+                
+                // If no specific repo path, use AirGit itself
                 if (repoPath) {
                     url.searchParams.append('repoPath', repoPath);
+                } else {
+                    url.searchParams.append('repoPath', '/home/ytnobody/AirGit');
                 }
                 
                 const response = await fetch(url.toString());
