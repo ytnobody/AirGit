@@ -2258,8 +2258,25 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}
 	agentStatusMutex.Unlock()
 	
-	branchName := fmt.Sprintf("airgit/issue-%d", issueNumber)
-	log.Printf("processAgentIssue: branch=%s, repoPath=%s", branchName, config.RepoPath)
+	timestamp := time.Now().UnixNano() / 1000000
+	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, timestamp)
+	worktreePath := filepath.Join("/tmp/airgit", fmt.Sprintf("issue-%d-%d", issueNumber, timestamp))
+	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
+	
+	// Ensure /tmp/airgit exists
+	if err := os.MkdirAll("/tmp/airgit", 0755); err != nil {
+		log.Printf("Failed to create /tmp/airgit: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to create worktree directory: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
 	
 	gitCmd := func(args ...string) error {
 		log.Printf("git: %v", args)
@@ -2275,14 +2292,26 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}
 
 	gitCmd("fetch", "origin")
-	gitCmd("checkout", "main")
-	gitCmd("pull", "origin", "main")
 	
-	if err := gitCmd("checkout", "-b", branchName); err != nil {
-		log.Printf("branch creation failed, trying checkout: %v", err)
-		gitCmd("checkout", branchName)
-		gitCmd("pull", "origin", branchName)
+	// Create git worktree
+	log.Printf("Creating git worktree at %s", worktreePath)
+	if err := gitCmd("worktree", "add", worktreePath, "-b", branchName, "main"); err != nil {
+		log.Printf("worktree creation failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to create worktree: %v", err),
+			StartTime:   time.Now().Add(-1 * time.Minute),
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
 	}
+	defer func() {
+		log.Printf("Removing git worktree at %s", worktreePath)
+		gitCmd("worktree", "remove", worktreePath)
+	}()
 
 	// Create prompt for Copilot CLI
 	prompt := fmt.Sprintf(`You are a code implementation assistant. Please analyze and implement the solution for GitHub issue #%d.
@@ -2323,8 +2352,8 @@ The Copilot CLI will implement the solution based on the issue description.
 	
 	// Use copilot /delegate to generate implementation
 	copilotCmd := exec.Command("copilot", "/delegate", "--prompt", prompt)
-	copilotCmd.Dir = config.RepoPath
-	copilotCmd.Env = append(os.Environ(), "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin")
+	copilotCmd.Dir = worktreePath
+	copilotCmd.Env = os.Environ()
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
