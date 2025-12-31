@@ -2372,9 +2372,11 @@ The Copilot CLI will implement the solution based on the issue description.
 	if err != nil {
 		nodePath = "/home/ytnobody/.asdf/installs/nodejs/22.21.0/bin/node"
 	}
-	copilotCmd := exec.Command(nodePath, "--input-type=module", tmpFile.Name())
+	copilotCmd := exec.Command(nodePath, tmpFile.Name())
 	copilotCmd.Dir = worktreePath
-	copilotCmd.Env = os.Environ()
+	env := os.Environ()
+	env = append(env, "NODE_OPTIONS=--input-type=module")
+	copilotCmd.Env = env
 
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
