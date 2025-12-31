@@ -1305,41 +1305,6 @@
             }
         }
 
-        async function loadGitHubIssues() {
-            const owner = issuesOwnerInput.value.trim();
-            const repo = issuesRepoInput.value.trim();
-
-            if (!owner || !repo) {
-                issuesList.innerHTML = '<div class="text-center text-red-400 text-sm">Please enter owner and repository name</div>';
-                return;
-            }
-
-            issuesLoadBtn.disabled = true;
-            issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">Loading...</div>';
-
-            try {
-                const url = new URL('/api/github/issues', window.location.origin);
-                url.searchParams.append('owner', owner);
-                url.searchParams.append('repo', repo);
-
-                const response = await fetch(url.toString());
-                const data = await response.json();
-
-                if (response.ok && data.issues) {
-                    displayGitHubIssues(data.issues, owner, repo);
-                } else if (data.error) {
-                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">${escapeHtml(data.error)}</div>`;
-                } else {
-                    issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Failed to load issues</div>`;
-                }
-            } catch (error) {
-                console.error('Issues load error:', error);
-                issuesList.innerHTML = `<div class="text-center text-red-400 text-sm">Connection failed: ${escapeHtml(error.message)}</div>`;
-            } finally {
-                issuesLoadBtn.disabled = false;
-            }
-        }
-
         function displayGitHubIssues(issues, owner, repo) {
             if (issues.length === 0) {
                 issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm">No issues found</div>';
