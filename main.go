@@ -2315,13 +2315,10 @@ Requirements:
 	}
 	defer os.Remove(promptFile)
 	
-	// Use Copilot CLI with the prompt file
-	copilotCmd := exec.Command("copilot", "/delegate", "<", promptFile)
+	// Use Copilot CLI with /delegate via stdin
+	copilotCmd := exec.Command("copilot", "/delegate")
 	copilotCmd.Dir = config.RepoPath
-	
-	// Read prompt from stdin instead
-	copilotCmd = exec.Command("sh", "-c", fmt.Sprintf("cat %s | copilot /delegate", promptFile))
-	copilotCmd.Dir = config.RepoPath
+	copilotCmd.Stdin = strings.NewReader(prompt)
 	
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
