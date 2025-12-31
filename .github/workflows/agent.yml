@@ -23,30 +23,25 @@ jobs:
           BRANCH="airgit/issue-${ISSUE_NUM}"
           DEFAULT=$(git rev-parse --abbrev-ref origin/HEAD | sed 's@origin/@@')
           
-          # Start fresh from default branch
           git checkout "$DEFAULT"
           git pull origin "$DEFAULT"
           
-          # Check if branch exists on remote
-          if git rev-parse "origin/$BRANCH" > /dev/null 2>&1; then
-            echo "Branch exists on remote, checking it out and pulling"
+          # Check if branch exists on remote AFTER fetch
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "Branch exists on remote"
             git checkout "$BRANCH"
             git pull origin "$BRANCH"
           else
-            echo "Branch does not exist, creating new"
+            echo "Branch does not exist"
             git checkout -b "$BRANCH"
           fi
           
-          # Create solution file
           mkdir -p .github/agent
           echo "# Issue #${ISSUE_NUM}" > ".github/agent/issue-${ISSUE_NUM}.md"
-          echo "Solution generated at $(date)" >> ".github/agent/issue-${ISSUE_NUM}.md"
-          
-          # Add and commit
+          echo "Generated: $(date)" >> ".github/agent/issue-${ISSUE_NUM}.md"
           git add ".github/agent/issue-${ISSUE_NUM}.md"
-          git commit -m "feat: Solution for issue #${ISSUE_NUM}"
-          
-          # Push with proper setup
+          git commit -m "feat: Solution for issue #${ISSUE_NUM}" || echo "Nothing to commit"
+          git pull origin "$BRANCH" || true
           git push -u origin "$BRANCH"
       - uses: actions/github-script@v7
         id: pr
