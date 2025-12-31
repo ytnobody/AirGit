@@ -2155,41 +2155,70 @@ func executeCommand(name string, args ...string) (string, error) {
 }
 
 func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 
-if r.Method != http.MethodPost {
-w.WriteHeader(http.StatusMethodNotAllowed)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": "Only POST method is supported",
-})
-return
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
+		return
+	}
+
+	var payload struct {
+		IssueNumber int    `json:"issue_number"`
+		IssueTitle  string `json:"issue_title"`
+		IssueBody   string `json:"issue_body"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+		return
+	}
+
+	log.Printf("Agent: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+
+	go processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
-var payload struct {
-IssueNumber int    `json:"issue_number"`
-IssueTitle  string `json:"issue_title"`
-IssueBody   string `json:"issue_body"`
-Repository  string `json:"repository"`
-Owner       string `json:"owner"`
-Repo        string `json:"repo"`
-}
+func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
+	branchName := fmt.Sprintf("airgit/issue-%d", issueNumber)
+	
+	gitCmd := func(args ...string) error {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = config.RepoPath
+		return cmd.Run()
+	}
 
-if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{
-"error": fmt.Sprintf("Invalid payload: %v", err),
-})
-return
-}
+	gitCmd("fetch", "origin")
+	gitCmd("checkout", "main")
+	gitCmd("pull", "origin", "main")
+	
+	if err := gitCmd("checkout", "-b", branchName); err != nil {
+		gitCmd("checkout", branchName)
+		gitCmd("pull", "origin", branchName)
+	}
 
-log.Printf("Agent trigger received: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+	solutionFile := filepath.Join(config.RepoPath, fmt.Sprintf(".github/agent/issue-%d.md", issueNumber))
+	os.MkdirAll(filepath.Dir(solutionFile), 0755)
 
-json.NewEncoder(w).Encode(map[string]interface{}{
-"success": true,
-"message": fmt.Sprintf("Agent trigger received for issue #%d", payload.IssueNumber),
-"issue": map[string]interface{}{
-"number": payload.IssueNumber,
-"title":  payload.IssueTitle,
-},
-})
+	content := fmt.Sprintf("# Issue #%d\n\n## %s\n\n%s\n\nGenerated: %s",
+		issueNumber, issueTitle, issueBody, time.Now().Format("2006-01-02 15:04:05"))
+	os.WriteFile(solutionFile, []byte(content), 0644)
+
+	gitCmd("add", solutionFile)
+	gitCmd("commit", "-m", fmt.Sprintf("feat: Solution for issue #%d\n\n%s", issueNumber, issueTitle))
+	gitCmd("push", "-u", "origin", branchName)
+
+	cmd := exec.Command("gh", "pr", "create",
+		"--title", fmt.Sprintf("[Agent] Issue #%d", issueNumber),
+		"--body", fmt.Sprintf("Solution for issue #%d\n\n%s", issueNumber, issueTitle),
+		"--head", branchName,
+		"--base", "main")
+	cmd.Dir = config.RepoPath
+	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+	cmd.Run()
+
+	log.Printf("Agent completed: Issue #%d", issueNumber)
 }
