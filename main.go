@@ -2282,7 +2282,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 
 	// Use Copilot CLI to generate implementation
 	log.Printf("Calling Copilot CLI for issue #%d", issueNumber)
-	copilotCmd := exec.Command("gh", "copilot", "issue", strconv.Itoa(issueNumber))
+	copilotCmd := exec.Command("copilot", "issue", strconv.Itoa(issueNumber))
 	copilotCmd.Dir = config.RepoPath
 	copilotCmd.Env = append(os.Environ(), 
 		"GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"),
