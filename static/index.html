@@ -339,6 +339,9 @@
                     </div>
                 </div>
                 <div id="issues-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="mb-4">
+                    <input id="issues-search" type="text" placeholder="Search by title, #number, or author..." class="w-full bg-white border border-sky-300 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                </div>
                 <div id="issues-list" class="space-y-2 mb-4">
                     <div class="text-center text-gray-600 text-sm py-4">Loading issues...</div>
                 </div>
@@ -504,6 +507,7 @@
         let currentIssuesUrl = null;
         let currentEditingRemote = null;
         let selectedTagForPush = null;
+        let allIssues = [];  // Store all issues for filtering
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -950,60 +954,8 @@
                     if (data.error) {
                         showIssuesError(`Error fetching issues: ${data.error}`);
                     } else if (data.issues && data.issues.length > 0) {
-                        const issuesList = document.getElementById('issues-list');
-                        issuesList.innerHTML = data.issues.map(issue => `
-                            <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">
-                                <div class="flex justify-between items-start gap-2">
-                                    <div class="flex-1">
-                                        <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
-                                        <div class="text-xs text-gray-600 mt-1">${issue.body.substring(0, 100)}${issue.body.length > 100 ? '...' : ''}</div>
-                                    </div>
-                                    <button class="agent-run-btn bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1 rounded transition-colors whitespace-nowrap" data-issue-number="${issue.number}" data-issue-title="${issue.title.replace(/"/g, '&quot;')}" data-issue-body="${issue.body.replace(/"/g, '&quot;')}">
-                                        🤖 Agent
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('');
-                        
-                        // Attach event listeners to agent buttons
-                        document.querySelectorAll('.agent-run-btn').forEach(btn => {
-                            btn.addEventListener('click', async (e) => {
-                                e.stopPropagation();
-                                const issueNumber = btn.dataset.issueNumber;
-                                const issueTitle = btn.dataset.issueTitle;
-                                const issueBody = btn.dataset.issueBody;
-                                
-                                btn.disabled = true;
-                                btn.textContent = '⏳ Running...';
-                                
-                                try {
-                                    const response = await fetch('/api/agent/process', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            issue_number: parseInt(issueNumber),
-                                            issue_title: issueTitle,
-                                            issue_body: issueBody
-                                        })
-                                    });
-                                    
-                                    if (response.ok) {
-                                        btn.textContent = '✅ Done';
-                                        btn.classList.add('bg-green-600', 'hover:bg-green-500');
-                                        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                    } else {
-                                        btn.textContent = '❌ Error';
-                                        btn.classList.add('bg-red-600', 'hover:bg-red-500');
-                                        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                    }
-                                } catch (error) {
-                                    btn.textContent = '❌ Error';
-                                    btn.classList.add('bg-red-600', 'hover:bg-red-500');
-                                    btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                    console.error('Agent execution error:', error);
-                                }
-                            });
-                        });
+                        allIssues = data.issues;
+                        displayFilteredIssues(allIssues);
                     } else {
                         document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-sm py-4">No open issues found</div>';
                     }
@@ -1014,6 +966,96 @@
                 console.error('Issues load error:', error);
                 showIssuesError('Connection error: ' + error.message);
             }
+        });
+        
+        function displayFilteredIssues(issuesToDisplay) {
+            const issuesList = document.getElementById('issues-list');
+            if (issuesToDisplay.length === 0) {
+                issuesList.innerHTML = '<div class="text-center text-gray-600 text-sm py-4">No issues match your search</div>';
+                return;
+            }
+            
+            // Limit to 10 issues
+            const limitedIssues = issuesToDisplay.slice(0, 10);
+            issuesList.innerHTML = limitedIssues.map(issue => `
+                <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">
+                    <div class="flex justify-between items-start gap-2">
+                        <div class="flex-1">
+                            <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
+                            <div class="text-xs text-gray-500 mt-1">Author: ${issue.author || 'unknown'}</div>
+                            <div class="text-xs text-gray-600 mt-1">${(issue.body || '').substring(0, 80)}${(issue.body || '').length > 80 ? '...' : ''}</div>
+                        </div>
+                        <button class="agent-run-btn bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1 rounded transition-colors whitespace-nowrap" data-issue-number="${issue.number}" data-issue-title="${issue.title.replace(/"/g, '&quot;')}" data-issue-body="${(issue.body || '').replace(/"/g, '&quot;')}">
+                            🤖 Agent
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+            if (issuesToDisplay.length > 10) {
+                issuesList.innerHTML += `<div class="text-center text-gray-500 text-xs py-2">Showing 10 of ${issuesToDisplay.length} issues</div>`;
+            }
+            
+            // Attach event listeners to agent buttons
+            document.querySelectorAll('.agent-run-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const issueNumber = btn.dataset.issueNumber;
+                    const issueTitle = btn.dataset.issueTitle;
+                    const issueBody = btn.dataset.issueBody;
+                    
+                    btn.disabled = true;
+                    btn.textContent = '⏳ Running...';
+                    
+                    try {
+                        const response = await fetch('/api/agent/process', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                issue_number: parseInt(issueNumber),
+                                issue_title: issueTitle,
+                                issue_body: issueBody
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            btn.textContent = '✅ Done';
+                            btn.classList.add('bg-green-600', 'hover:bg-green-500');
+                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                        } else {
+                            btn.textContent = '❌ Error';
+                            btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                        }
+                    } catch (error) {
+                        btn.textContent = '❌ Error';
+                        btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                        console.error('Agent execution error:', error);
+                    }
+                });
+            });
+        }
+        
+        document.getElementById('issues-search').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            
+            const filtered = allIssues.filter(issue => {
+                const number = issue.number.toString();
+                const title = (issue.title || '').toLowerCase();
+                const author = (issue.author || '').toLowerCase();
+                const body = (issue.body || '').toLowerCase();
+                
+                // Check for number match (#123)
+                if (query.startsWith('#')) {
+                    return number.includes(query.substring(1));
+                }
+                
+                // Freeword search in title, author, and body
+                return title.includes(query) || author.includes(query) || body.includes(query);
+            });
+            
+            displayFilteredIssues(filtered);
         });
         
         document.getElementById('issues-refresh-btn').addEventListener('click', () => {
