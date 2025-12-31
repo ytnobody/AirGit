@@ -20,8 +20,8 @@ A lightweight web-based GUI for managing Git repositories directly from your bro
 - 🔧 Systemd service registration and management
 - ⚙️ Settings menu for configuration
 - 🚀 Standalone Go binary
-- 🤖 **NEW**: GitHub Issues integration with AI Agent support
-- 🧠 **NEW**: Autonomous issue resolution via GitHub Actions
+- 🤖 **GitHub Issues integration** - Browse and display GitHub issues directly in UI
+- 🧠 **AI Agent for issue resolution** - One-click automated issue fixing with PR generation
 
 ## Quick Start
 
@@ -715,62 +715,78 @@ The PWA manifest and service worker enable offline caching and home screen insta
 
 ## GitHub AI Agent Integration
 
-AirGit includes autonomous issue resolution capabilities via GitHub Actions and AI integration.
+AirGit includes autonomous issue resolution capabilities. Users can trigger AI-powered agent processing directly from the AirGit UI.
 
 ### Quick Start - Trigger Agent
 
-1. Open AirGit UI → **Issues** tab
-2. Enter GitHub repository (owner/repo)
-3. Click **Load Issues** to fetch from GitHub
-4. Select an issue
-5. Click **🤖 Trigger Agent** button
-6. Agent will post `/airgit run` comment and GitHub Actions will start
+1. Open AirGit UI → **Issues** button in navigation bar
+2. Agent will fetch GitHub issues from the current repository
+3. Each issue shows an **🤖 Agent** button
+4. Click to start processing that issue
 
 ### How It Works
 
-1. **AirGit UI**: Display GitHub issues directly in the mobile interface
-2. **Agent Trigger**: One-click agent invocation from issue detail
-3. **GitHub Actions**: Automated workflow processes the `/airgit run` comment
-4. **Code Generation**: Integrates with Copilot/LLM for intelligent code generation
-5. **Pull Request**: Auto-generates PR with proposed changes
-6. **Review**: View and merge changes directly in AirGit or GitHub
+1. **Issue Discovery**: AirGit detects GitHub remote and fetches open issues
+2. **UI Display**: Issues listed with title, description, and Agent button
+3. **Agent Trigger**: Click button to start processing (from AirGit UI)
+4. **Processing**: Server-side execution:
+   - Fetch latest from origin
+   - Create feature branch (airgit/issue-{number})
+   - Generate solution file
+   - Commit and push changes
+   - Create Pull Request via `gh cli`
+5. **Review**: View and merge PR in GitHub
 
-### Setting Up GitHub Copilot Integration
+### Requirements
 
-To enable AI-powered code generation:
-
-```bash
-# 1. Ensure GitHub CLI is authenticated
-gh auth login
-
-# 2. Install GitHub Copilot extension (if available)
-gh extension install github/gh-copilot
-
-# 3. The workflow will automatically use Copilot when available
-```
-
-### Using LLM APIs (OpenAI, Claude, etc.)
-
-Set environment variables in GitHub Actions secrets:
-
-```
-OPENAI_API_KEY = sk-...       # For OpenAI GPT models
-ANTHROPIC_API_KEY = sk-ant-... # For Claude models
-```
-
-Then update `.github/workflows/agent.yml` to use your LLM of choice.
+- GitHub repository with configured origin remote
+- `gh` CLI installed and authenticated:
+  ```bash
+  gh auth login
+  ```
+- GITHUB_TOKEN environment variable (optional, for PR creation):
+  ```bash
+  export GITHUB_TOKEN=ghp_...
+  ```
 
 ### Example Workflow
 
 ```
-Issue Created:
-  └─ "/airgit run" comment posted
-  └─ GitHub Actions triggered
-  └─ AI Agent analyzes issue
-  └─ Code generated automatically
-  └─ Pull Request created
-  └─ You review and merge
+Click Agent Button
+  └─ AirGit displays Issue details
+  └─ Click 🤖 Agent
+  └─ Server processes (git operations)
+  └─ Feature branch created
+  └─ Solution file generated
+  └─ Commit pushed
+  └─ PR created automatically
+  └─ UI shows ✅ Done
 ```
+
+### Architecture
+
+```
+AirGit UI (Browser)
+    ↓ Click Agent Button
+    ↓ POST /api/agent/process
+AirGit Server (Go)
+    ├─ Git operations (fetch, branch, commit, push)
+    ├─ Solution generation
+    └─ PR creation via gh CLI
+    ↓
+GitHub Repository
+    ├─ Feature branch created
+    ├─ Commits pushed
+    └─ Pull Request opened
+```
+
+### Notes
+
+- All processing happens on the server (not GitHub Actions)
+- Works in isolated/firewall environments
+- No external webhooks required
+- Direct control from AirGit UI for better UX
+
 
 ## Architecture
 
@@ -793,45 +809,4 @@ Local Git Repositories & Systemd User Services
 ## License
 
 MIT
-
-## Setup AI Agent Workflow
-
-To enable the AI Agent functionality in any Git repository:
-
-### Quick Setup
-
-```bash
-# 1. Create workflows directory
-mkdir -p .github/workflows
-
-# 2. Copy the agent workflow
-curl -s https://raw.githubusercontent.com/ytnobody/AirGit/feature/github-agent-integration/.github/workflows/agent.yml > .github/workflows/agent.yml
-
-# 3. Commit and push
-git add .github/workflows/agent.yml
-git commit -m "feat: Add AI Agent workflow"
-git push
-```
-
-### Usage
-
-1. Create or open an issue in your repository
-2. Add a comment with `/airgit run`
-3. GitHub Actions will automatically:
-   - Create a feature branch (airgit/issue-<NUMBER>)
-   - Generate code changes
-   - Create a Pull Request
-   - Post status updates
-
-### Customization
-
-To change the trigger command, modify the `if:` condition in `.github/workflows/agent.yml`:
-
-```yaml
-if: contains(github.event.comment.body, '/my-command run')
-```
-
-### Integration with Multiple Repositories
-
-The workflow can be used in any GitHub repository. Simply copy the workflow file and customize as needed for your project.
 
