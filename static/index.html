@@ -910,7 +910,8 @@
                 const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/github/issues', window.location.origin);
                 
-                if (repoPath) {
+                // Use provided repoPath if it's not just '/', otherwise use default
+                if (repoPath && repoPath !== '/') {
                     url.searchParams.append('repoPath', repoPath);
                 } else {
                     url.searchParams.append('repoPath', '/home/ytnobody/AirGit');
@@ -941,7 +942,11 @@
         }
         
         // Load issues on page load
-        loadGitHubIssues();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadGitHubIssues);
+        } else {
+            loadGitHubIssues();
+        }
         
         function displayFilteredIssues(issuesToDisplay) {
             const issuesList = document.getElementById('issues-list');
