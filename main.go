@@ -2097,7 +2097,7 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch issues using gh CLI
-	cmd := exec.Command("gh", "issue", "list", "--json", "number,title,body", "-L", "50")
+	cmd := exec.Command("gh", "issue", "list", "--json", "number,title,body,author", "-L", "50")
 	cmd.Dir = config.RepoPath
 	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
 	

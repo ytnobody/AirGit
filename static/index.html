@@ -962,7 +962,7 @@
                     <div class="flex justify-between items-start gap-2">
                         <div class="flex-1">
                             <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
-                            <div class="text-xs text-gray-500 mt-1">Author: ${issue.author || 'unknown'}</div>
+                            <div class="text-xs text-gray-500 mt-1">Author: ${(issue.author && issue.author.login) ? issue.author.login : (typeof issue.author === 'string' ? issue.author : 'unknown')}</div>
                             <div class="text-xs text-gray-600 mt-1">${(issue.body || '').substring(0, 80)}${(issue.body || '').length > 80 ? '...' : ''}</div>
                         </div>
                         <button class="agent-run-btn bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1 rounded transition-colors whitespace-nowrap" data-issue-number="${issue.number}" data-issue-title="${issue.title.replace(/"/g, '&quot;')}" data-issue-body="${(issue.body || '').replace(/"/g, '&quot;')}">
@@ -1023,7 +1023,8 @@
             const filtered = allIssues.filter(issue => {
                 const number = issue.number.toString();
                 const title = (issue.title || '').toLowerCase();
-                const author = (issue.author || '').toLowerCase();
+                const authorStr = (issue.author && issue.author.login) ? issue.author.login : (typeof issue.author === 'string' ? issue.author : '');
+                const author = authorStr.toLowerCase();
                 const body = (issue.body || '').toLowerCase();
                 
                 // Check for number match (#123)
