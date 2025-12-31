@@ -20,6 +20,8 @@ A lightweight web-based GUI for managing Git repositories directly from your bro
 - 🔧 Systemd service registration and management
 - ⚙️ Settings menu for configuration
 - 🚀 Standalone Go binary
+- 🤖 **NEW**: GitHub Issues integration with AI Agent support
+- 🧠 **NEW**: Autonomous issue resolution via GitHub Actions
 
 ## Quick Start
 
@@ -710,6 +712,65 @@ Development Server
 3. Android: Tap ⋮ → Install app
 
 The PWA manifest and service worker enable offline caching and home screen installation.
+
+## GitHub AI Agent Integration
+
+AirGit includes autonomous issue resolution capabilities via GitHub Actions and AI integration.
+
+### Quick Start - Trigger Agent
+
+1. Open AirGit UI → **Issues** tab
+2. Enter GitHub repository (owner/repo)
+3. Click **Load Issues** to fetch from GitHub
+4. Select an issue
+5. Click **🤖 Trigger Agent** button
+6. Agent will post `/airgit run` comment and GitHub Actions will start
+
+### How It Works
+
+1. **AirGit UI**: Display GitHub issues directly in the mobile interface
+2. **Agent Trigger**: One-click agent invocation from issue detail
+3. **GitHub Actions**: Automated workflow processes the `/airgit run` comment
+4. **Code Generation**: Integrates with Copilot/LLM for intelligent code generation
+5. **Pull Request**: Auto-generates PR with proposed changes
+6. **Review**: View and merge changes directly in AirGit or GitHub
+
+### Setting Up GitHub Copilot Integration
+
+To enable AI-powered code generation:
+
+```bash
+# 1. Ensure GitHub CLI is authenticated
+gh auth login
+
+# 2. Install GitHub Copilot extension (if available)
+gh extension install github/gh-copilot
+
+# 3. The workflow will automatically use Copilot when available
+```
+
+### Using LLM APIs (OpenAI, Claude, etc.)
+
+Set environment variables in GitHub Actions secrets:
+
+```
+OPENAI_API_KEY = sk-...       # For OpenAI GPT models
+ANTHROPIC_API_KEY = sk-ant-... # For Claude models
+```
+
+Then update `.github/workflows/agent.yml` to use your LLM of choice.
+
+### Example Workflow
+
+```
+Issue Created:
+  └─ "/airgit run" comment posted
+  └─ GitHub Actions triggered
+  └─ AI Agent analyzes issue
+  └─ Code generated automatically
+  └─ Pull Request created
+  └─ You review and merge
+```
 
 ## Architecture
 

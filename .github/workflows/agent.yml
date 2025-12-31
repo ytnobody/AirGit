@@ -41,15 +41,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_NUMBER=${{ github.event.issue.number }}
-          ISSUE_TITLE=$(gh issue view $ISSUE_NUMBER --json title -q '.title')
-          ISSUE_BODY=$(gh issue view $ISSUE_NUMBER --json body -q '.body')
           
-          # Create a branch for this issue
-          BRANCH_NAME="airgit/issue-${ISSUE_NUMBER}"
-          git checkout -b "$BRANCH_NAME"
-          
-          echo "Generated code for issue: $ISSUE_TITLE" > /tmp/generation.txt
-          echo "$ISSUE_BODY" >> /tmp/generation.txt
+          # Use the airgit-agent.sh script for analysis
+          bash scripts/airgit-agent.sh . "$ISSUE_NUMBER"
 
       - name: Create commit with generated changes
         run: |
