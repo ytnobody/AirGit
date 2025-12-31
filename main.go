@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -2255,33 +2256,40 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		gitCmd("pull", "origin", branchName)
 	}
 
-	solutionFile := filepath.Join(config.RepoPath, fmt.Sprintf(".github/agent/issue-%d.md", issueNumber))
-	log.Printf("creating solution file: %s", solutionFile)
+	// Use Copilot CLI to generate implementation
+	log.Printf("Calling Copilot CLI for issue #%d", issueNumber)
+	copilotCmd := exec.Command("gh", "copilot", "issue", strconv.Itoa(issueNumber))
+	copilotCmd.Dir = config.RepoPath
+	copilotCmd.Env = append(os.Environ(), 
+		"GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"),
+		"GH_TOKEN="+os.Getenv("GITHUB_TOKEN"))
 	
-	os.MkdirAll(filepath.Dir(solutionFile), 0755)
-
-	content := fmt.Sprintf("# Issue #%d\n\n## %s\n\n%s\n\nGenerated: %s",
-		issueNumber, issueTitle, issueBody, time.Now().Format("2006-01-02 15:04:05"))
+	out, err := copilotCmd.CombinedOutput()
+	log.Printf("Copilot output: err=%v, output=%s", err, string(out))
 	
-	if err := os.WriteFile(solutionFile, []byte(content), 0644); err != nil {
-		log.Printf("write error: %v", err)
-		return
+	// Get current branch to push
+	branchCheckCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchCheckCmd.Dir = config.RepoPath
+	currentBranchOut, _ := branchCheckCmd.Output()
+	currentBranch := strings.TrimSpace(string(currentBranchOut))
+	log.Printf("Current branch after copilot: %s", currentBranch)
+	
+	// Push the branch
+	if currentBranch != "" {
+		gitCmd("push", "-u", "origin", currentBranch)
+		
+		// Create PR
+		prCmd := exec.Command("gh", "pr", "create",
+			"--title", fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle),
+			"--body", fmt.Sprintf("Solution for issue #%d\n\n%s", issueNumber, issueBody),
+			"--head", currentBranch,
+			"--base", "main")
+		prCmd.Dir = config.RepoPath
+		prCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+		
+		prOut, prErr := prCmd.CombinedOutput()
+		log.Printf("PR creation: err=%v, output=%s", prErr, string(prOut))
 	}
-
-	gitCmd("add", solutionFile)
-	gitCmd("commit", "-m", fmt.Sprintf("feat: Solution for issue #%d\n\n%s", issueNumber, issueTitle))
-	gitCmd("push", "-u", "origin", branchName)
-
-	cmd := exec.Command("gh", "pr", "create",
-		"--title", fmt.Sprintf("[Agent] Issue #%d", issueNumber),
-		"--body", fmt.Sprintf("Solution for issue #%d\n\n%s", issueNumber, issueTitle),
-		"--head", branchName,
-		"--base", "main")
-	cmd.Dir = config.RepoPath
-	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
-	
-	out, err := cmd.CombinedOutput()
-	log.Printf("PR creation: err=%v, output=%s", err, string(out))
 
 	log.Printf("processAgentIssue: completed for #%d", issueNumber)
 }
