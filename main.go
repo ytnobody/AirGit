@@ -2369,11 +2369,15 @@ The Copilot CLI will implement the solution based on the issue description.
 	
 	if err != nil {
 		log.Printf("Copilot CLI error: %v", err)
+		errorMsg := fmt.Sprintf("Copilot implementation failed: %v", err)
+		if copilotError != "" {
+			errorMsg = fmt.Sprintf("Copilot error: %s", copilotError)
+		}
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
 			Status:      "failed",
-			Message:     fmt.Sprintf("Copilot implementation failed: %v", err),
+			Message:     errorMsg,
 			StartTime:   time.Now().Add(-1 * time.Minute),
 			EndTime:     time.Now(),
 		}
