@@ -19,21 +19,38 @@ jobs:
           git config --global user.email "agent@airgit.local"
       - run: |
           git fetch origin
-          BRANCH="airgit/issue-${{ github.event.issue.number }}"
-          DEFAULT=$(git rev-parse --abbrev-ref origin/HEAD | cut -d/ -f2)
+          ISSUE_NUM=${{ github.event.issue.number }}
+          BRANCH="airgit/issue-${ISSUE_NUM}"
+          DEFAULT=$(git rev-parse --abbrev-ref origin/HEAD | sed 's@origin/@@')
+          
+          # Start fresh from default branch
           git checkout "$DEFAULT"
           git pull origin "$DEFAULT"
-          git branch -D "$BRANCH" 2>/dev/null || true
-          git checkout -b "$BRANCH"
+          
+          # Check if branch exists on remote
+          if git rev-parse "origin/$BRANCH" > /dev/null 2>&1; then
+            echo "Branch exists on remote, checking it out and pulling"
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH"
+          else
+            echo "Branch does not exist, creating new"
+            git checkout -b "$BRANCH"
+          fi
+          
+          # Create solution file
           mkdir -p .github/agent
-          echo "# Issue #${{ github.event.issue.number }}" > ".github/agent/issue-${{ github.event.issue.number }}.md"
-          git add ".github/agent/issue-${{ github.event.issue.number }}.md"
-          git commit -m "feat: Solution for issue #${{ github.event.issue.number }}"
-          git push -u origin "$BRANCH" --force
+          echo "# Issue #${ISSUE_NUM}" > ".github/agent/issue-${ISSUE_NUM}.md"
+          echo "Solution generated at $(date)" >> ".github/agent/issue-${ISSUE_NUM}.md"
+          
+          # Add and commit
+          git add ".github/agent/issue-${ISSUE_NUM}.md"
+          git commit -m "feat: Solution for issue #${ISSUE_NUM}"
+          
+          # Push with proper setup
+          git push -u origin "$BRANCH"
       - uses: actions/github-script@v7
         id: pr
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const issue_number = ${{ github.event.issue.number }};
             const branch = `airgit/issue-${issue_number}`;
@@ -69,7 +86,6 @@ jobs:
       - uses: actions/github-script@v7
         if: success()
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -80,7 +96,6 @@ jobs:
       - uses: actions/github-script@v7
         if: failure()
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
