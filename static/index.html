@@ -487,6 +487,8 @@
         let currentEditingRemote = null;
         let selectedTagForPush = null;
         let allIssues = [];  // Store all issues for filtering
+        let issuesOwner = null;  // GitHub repo owner
+        let issuesRepo = null;   // GitHub repo name
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -924,6 +926,8 @@
                 console.log('Issues response:', data);
                 
                 if (response.ok && data.owner) {
+                    issuesOwner = data.owner;
+                    issuesRepo = data.repo;
                     if (data.error) {
                         showIssuesError(`Error fetching issues: ${data.error}`);
                     } else if (data.issues && data.issues.length > 0) {
@@ -961,11 +965,14 @@
                 const assigneeNames = (issue.assignees && Array.isArray(issue.assignees)) 
                     ? issue.assignees.map(a => a.login || a).join(', ')
                     : '';
+                const issueUrl = issuesOwner && issuesRepo 
+                    ? `https://github.com/${issuesOwner}/${issuesRepo}/issues/${issue.number}`
+                    : '#';
                 return `
                 <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">
                     <div class="flex justify-between items-start gap-2">
                         <div class="flex-1">
-                            <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
+                            <div class="font-semibold text-sky-700"><a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">#${issue.number} ${issue.title}</a></div>
                             <div class="text-xs text-gray-500 mt-1">Author: ${(issue.author && issue.author.login) ? issue.author.login : (typeof issue.author === 'string' ? issue.author : 'unknown')}</div>
                             ${assigneeNames ? `<div class="text-xs text-gray-500">Assignee: ${assigneeNames}</div>` : ''}
                             <div class="text-xs text-gray-600 mt-1">${(issue.body || '').substring(0, 80)}${(issue.body || '').length > 80 ? '...' : ''}</div>
