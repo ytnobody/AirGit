@@ -2368,7 +2368,10 @@ The Copilot CLI will implement the solution based on the issue description.
 	tmpFile.Close()
 
 	// Execute copilot via node with proper module type
-	nodePath := "/usr/local/bin/node"
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		nodePath = "/home/ytnobody/.asdf/installs/nodejs/22.21.0/bin/node"
+	}
 	copilotCmd := exec.Command(nodePath, "--input-type=module", tmpFile.Name())
 	copilotCmd.Dir = worktreePath
 	copilotCmd.Env = os.Environ()
