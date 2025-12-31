@@ -91,13 +91,28 @@
         </nav>
 
         <!-- Main Content -->
-        <main class="flex-1 flex items-center justify-center px-4 py-8 safe-area-inset-bottom">
-            <div class="w-full max-w-sm">
+        <main class="flex-1 flex flex-col px-4 py-4 safe-area-inset-bottom overflow-hidden">
+            <div class="w-full max-w-sm mx-auto flex-1 flex flex-col overflow-hidden">
                 <!-- Status Alert -->
-                <div id="status-container" class="mb-6 hidden"></div>
+                <div id="status-container" class="mb-4 hidden"></div>
 
-                <!-- Push Button -->
-                <div class="flex justify-center gap-6">
+                <!-- Issues Panel -->
+                <div id="issues-panel" class="hidden flex-1 flex flex-col mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4 overflow-hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-sm font-bold text-sky-600">📋 Issues</h3>
+                        <button id="toggle-issues-btn" class="text-gray-500 hover:text-gray-700 text-sm">✕</button>
+                    </div>
+                    <div class="mb-2">
+                        <input id="issues-search" type="text" placeholder="Search issues..." class="w-full bg-white border border-sky-300 rounded px-2 py-1 text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div id="issues-list" class="flex-1 space-y-1 overflow-y-auto">
+                        <div class="text-center text-gray-600 text-xs py-4">Click Issues button to load</div>
+                    </div>
+                    <div id="issues-error" class="hidden mt-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-xs"></div>
+                </div>
+
+                <!-- Push/Pull Buttons -->
+                <div class="flex justify-center gap-6 mb-8">
                     <button id="push-button" class="push-button w-32 h-32 rounded-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-xl shadow-lg transition-all duration-200 active:shadow-inner focus:outline-none focus:ring-4 focus:ring-sky-300 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-2">
                         <i class="fas fa-square-caret-up text-2xl"></i>
                         <span id="button-text">PUSH</span>
@@ -327,32 +342,6 @@
         </div>
 
         <!-- GitHub Issues Modal -->
-        <div id="issues-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-2xl border border-sky-200 max-h-96 overflow-y-auto">
-                <h2 class="text-lg font-bold text-sky-600 mb-4">📋 Repository Issues</h2>
-                <div id="issues-info" class="mb-4 space-y-2">
-                    <div class="text-sm text-gray-700">
-                        <span class="font-semibold">Repository:</span> <span id="issues-repo-name" class="text-sky-600">Loading...</span>
-                    </div>
-                    <div class="text-sm text-gray-700">
-                        <span class="font-semibold">Remote:</span> <span id="issues-remote-url" class="text-gray-600 text-xs truncate">Loading...</span>
-                    </div>
-                </div>
-                <div id="issues-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
-                <div class="mb-4">
-                    <input id="issues-search" type="text" placeholder="Search by title, #number, or author..." class="w-full bg-white border border-sky-300 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
-                </div>
-                <div id="issues-list" class="space-y-2 mb-4">
-                    <div class="text-center text-gray-600 text-sm py-4">Loading issues...</div>
-                </div>
-                <div class="flex gap-2">
-                    <button id="issues-refresh-btn" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🔄 Refresh</button>
-                    <button id="issues-open-github-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">🐙 GitHub</button>
-                    <button id="issues-modal-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
-                </div>
-            </div>
-        </div>
-
         <!-- Create Tag Modal -->
         <div id="create-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
@@ -498,12 +487,9 @@
         const pushTagCloseBtn = document.getElementById('push-tag-close-btn');
         const pushTagError = document.getElementById('push-tag-error');
         const issuesBtn = document.getElementById('issues-btn');
-        const issuesModal = document.getElementById('issues-modal');
-        const issuesRepoName = document.getElementById('issues-repo-name');
-        const issuesRemoteUrl = document.getElementById('issues-remote-url');
+        const issuesPanel = document.getElementById('issues-panel');
+        const toggleIssuesBtn = document.getElementById('toggle-issues-btn');
         const issuesError = document.getElementById('issues-error');
-        const issuesOpenGitHubBtn = document.getElementById('issues-open-github-btn');
-        const issuesModalCloseBtn = document.getElementById('issues-modal-close-btn');
         let currentIssuesUrl = null;
         let currentEditingRemote = null;
         let selectedTagForPush = null;
@@ -923,11 +909,11 @@
 
         // GitHub Issues event listeners
         issuesBtn.addEventListener('click', async () => {
-            issuesModal.classList.remove('hidden');
+            issuesPanel.classList.toggle('hidden');
+            if (issuesPanel.classList.contains('hidden')) return;
+            
             issuesError.classList.add('hidden');
-            issuesRepoName.textContent = 'Loading...';
-            issuesRemoteUrl.textContent = 'Loading...';
-            document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-sm py-4">Loading issues...</div>';
+            document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-xs py-2">Loading issues...</div>';
             
             // Fetch current repository's GitHub issues
             try {
@@ -947,17 +933,13 @@
                 console.log('Issues response:', data);
                 
                 if (response.ok && data.owner) {
-                    issuesRepoName.textContent = `${data.owner}/${data.repo}`;
-                    issuesRemoteUrl.textContent = data.remoteUrl;
-                    currentIssuesUrl = data.issuesUrl;
-                    
                     if (data.error) {
                         showIssuesError(`Error fetching issues: ${data.error}`);
                     } else if (data.issues && data.issues.length > 0) {
                         allIssues = data.issues;
                         displayFilteredIssues(allIssues);
                     } else {
-                        document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-sm py-4">No open issues found</div>';
+                        document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-xs py-2">No open issues found</div>';
                     }
                 } else {
                     showIssuesError(data.error || 'Could not detect GitHub repository');
@@ -966,6 +948,10 @@
                 console.error('Issues load error:', error);
                 showIssuesError('Connection error: ' + error.message);
             }
+        });
+        
+        toggleIssuesBtn.addEventListener('click', () => {
+            issuesPanel.classList.add('hidden');
         });
         
         function displayFilteredIssues(issuesToDisplay) {
@@ -1056,26 +1042,6 @@
             });
             
             displayFilteredIssues(filtered);
-        });
-        
-        document.getElementById('issues-refresh-btn').addEventListener('click', () => {
-            issuesBtn.click();
-        });
-
-        issuesModalCloseBtn.addEventListener('click', () => {
-            issuesModal.classList.add('hidden');
-        });
-
-        issuesModal.addEventListener('click', (e) => {
-            if (e.target === issuesModal) {
-                issuesModal.classList.add('hidden');
-            }
-        });
-
-        issuesOpenGitHubBtn.addEventListener('click', () => {
-            if (currentIssuesUrl) {
-                window.open(currentIssuesUrl, '_blank');
-            }
         });
 
         function showIssuesError(message) {
