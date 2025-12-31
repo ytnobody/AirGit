@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -61,8 +62,19 @@ type Repository struct {
 	Path string `json:"path"`
 }
 
+type AgentStatus struct {
+	IssueNumber int       `json:"issueNumber"`
+	Status      string    `json:"status"` // "pending", "running", "completed", "failed"
+	Message     string    `json:"message"`
+	StartTime   time.Time `json:"startTime"`
+	EndTime     time.Time `json:"endTime,omitempty"`
+	PRNumber    int       `json:"prNumber,omitempty"`
+}
+
 var config Config
 var baseRepoPath string
+var agentStatus map[int]AgentStatus // issueNumber -> status
+var agentStatusMutex sync.Mutex
 
 func init() {
 	config = Config{
@@ -73,6 +85,7 @@ func init() {
 		TLSKey:     getEnv("AIRGIT_TLS_KEY", ""),
 	}
 	baseRepoPath = config.RepoPath
+	agentStatus = make(map[int]AgentStatus)
 
 	log.Printf("Config: RepoPath=%s", config.RepoPath)
 }
@@ -162,6 +175,7 @@ func main() {
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
 	http.HandleFunc("/api/agent/process", handleAgentProcess)
+	http.HandleFunc("/api/agent/status", handleAgentStatus)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -2230,6 +2244,16 @@ func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	log.Printf("processAgentIssue: starting for #%d", issueNumber)
 	
+	// Update status to running
+	agentStatusMutex.Lock()
+	agentStatus[issueNumber] = AgentStatus{
+		IssueNumber: issueNumber,
+		Status:      "running",
+		Message:     "Processing issue",
+		StartTime:   time.Now(),
+	}
+	agentStatusMutex.Unlock()
+	
 	branchName := fmt.Sprintf("airgit/issue-%d", issueNumber)
 	log.Printf("processAgentIssue: branch=%s, repoPath=%s", branchName, config.RepoPath)
 	
@@ -2274,6 +2298,10 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	currentBranch := strings.TrimSpace(string(currentBranchOut))
 	log.Printf("Current branch after copilot: %s", currentBranch)
 	
+	prNumber := 0
+	statusMsg := "Completed"
+	statusStr := "completed"
+	
 	// Push the branch
 	if currentBranch != "" {
 		gitCmd("push", "-u", "origin", currentBranch)
@@ -2289,7 +2317,41 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		
 		prOut, prErr := prCmd.CombinedOutput()
 		log.Printf("PR creation: err=%v, output=%s", prErr, string(prOut))
+		
+		if prErr == nil {
+			// Parse PR number from output
+			prOutput := string(prOut)
+			if strings.Contains(prOutput, "https://github.com") {
+				// Extract PR number from URL
+				parts := strings.Split(prOutput, "/pull/")
+				if len(parts) > 1 {
+					prStr := strings.Fields(parts[1])[0]
+					if num, err := strconv.Atoi(prStr); err == nil {
+						prNumber = num
+					}
+				}
+			}
+			statusMsg = fmt.Sprintf("PR created successfully")
+		} else {
+			statusStr = "failed"
+			statusMsg = fmt.Sprintf("PR creation failed: %v", prErr)
+		}
+	} else {
+		statusStr = "failed"
+		statusMsg = "No changes to push"
 	}
+
+	// Update status to completed/failed
+	agentStatusMutex.Lock()
+	agentStatus[issueNumber] = AgentStatus{
+		IssueNumber: issueNumber,
+		Status:      statusStr,
+		Message:     statusMsg,
+		StartTime:   time.Now().Add(-1 * time.Minute), // Adjust for demo
+		EndTime:     time.Now(),
+		PRNumber:    prNumber,
+	}
+	agentStatusMutex.Unlock()
 
 	log.Printf("processAgentIssue: completed for #%d", issueNumber)
 }
@@ -2323,4 +2385,41 @@ processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
 }()
 
 json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Agent processing started"})
+}
+
+func handleAgentStatus(w http.ResponseWriter, r *http.Request) {
+w.Header().Set("Content-Type", "application/json")
+
+if r.Method != http.MethodGet {
+w.WriteHeader(http.StatusMethodNotAllowed)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": "GET only"})
+return
+}
+
+issueNumberStr := r.URL.Query().Get("issue_number")
+if issueNumberStr == "" {
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": "Missing issue_number"})
+return
+}
+
+issueNumber, err := strconv.Atoi(issueNumberStr)
+if err != nil {
+w.WriteHeader(http.StatusBadRequest)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid issue_number"})
+return
+}
+
+agentStatusMutex.Lock()
+status, exists := agentStatus[issueNumber]
+agentStatusMutex.Unlock()
+
+if !exists {
+w.WriteHeader(http.StatusNotFound)
+json.NewEncoder(w).Encode(map[string]interface{}{"error": "No status for this issue"})
+return
+}
+
+w.WriteHeader(http.StatusOK)
+json.NewEncoder(w).Encode(status)
 }

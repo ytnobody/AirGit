@@ -1013,19 +1013,53 @@
                         });
                         
                         if (response.ok) {
-                            btn.textContent = '✅ Done';
-                            btn.classList.add('bg-green-600', 'hover:bg-green-500');
-                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                            // Poll for status
+                            let maxAttempts = 60;
+                            const pollInterval = setInterval(async () => {
+                                maxAttempts--;
+                                if (maxAttempts <= 0) {
+                                    clearInterval(pollInterval);
+                                    btn.textContent = '⏱️ Timeout';
+                                    btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+                                    btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                    btn.disabled = false;
+                                    return;
+                                }
+                                
+                                try {
+                                    const statusResponse = await fetch(`/api/agent/status?issue_number=${issueNumber}`);
+                                    if (statusResponse.ok) {
+                                        const status = await statusResponse.json();
+                                        if (status.status === 'completed') {
+                                            clearInterval(pollInterval);
+                                            btn.textContent = '✅ Done';
+                                            btn.classList.add('bg-green-600', 'hover:bg-green-500');
+                                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                            btn.disabled = false;
+                                        } else if (status.status === 'failed') {
+                                            clearInterval(pollInterval);
+                                            btn.textContent = '❌ Error';
+                                            btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                            btn.disabled = false;
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error('Status polling error:', err);
+                                }
+                            }, 1000); // Poll every 1 second
                         } else {
                             btn.textContent = '❌ Error';
                             btn.classList.add('bg-red-600', 'hover:bg-red-500');
                             btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                            btn.disabled = false;
                         }
                     } catch (error) {
                         btn.textContent = '❌ Error';
                         btn.classList.add('bg-red-600', 'hover:bg-red-500');
                         btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
                         console.error('Agent execution error:', error);
+                        btn.disabled = false;
                     }
                 });
             });
