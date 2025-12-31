@@ -326,11 +326,11 @@
             </div>
         </div>
 
-        <!-- GitHub Issues Modal (Opens GitHub directly) -->
+        <!-- GitHub Issues Modal -->
         <div id="issues-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
-            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-2xl border border-sky-200 max-h-96 overflow-y-auto">
                 <h2 class="text-lg font-bold text-sky-600 mb-4">📋 Repository Issues</h2>
-                <div id="issues-info" class="mb-6 space-y-2">
+                <div id="issues-info" class="mb-4 space-y-2">
                     <div class="text-sm text-gray-700">
                         <span class="font-semibold">Repository:</span> <span id="issues-repo-name" class="text-sky-600">Loading...</span>
                     </div>
@@ -339,8 +339,12 @@
                     </div>
                 </div>
                 <div id="issues-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div id="issues-list" class="space-y-2 mb-4">
+                    <div class="text-center text-gray-600 text-sm py-4">Loading issues...</div>
+                </div>
                 <div class="flex gap-2">
-                    <button id="issues-open-github-btn" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🐙 Open on GitHub</button>
+                    <button id="issues-refresh-btn" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🔄 Refresh</button>
+                    <button id="issues-open-github-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">🐙 GitHub</button>
                     <button id="issues-modal-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
                 </div>
             </div>
@@ -919,13 +923,13 @@
             issuesError.classList.add('hidden');
             issuesRepoName.textContent = 'Loading...';
             issuesRemoteUrl.textContent = 'Loading...';
+            document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-sm py-4">Loading issues...</div>';
             
-            // Fetch current repository's GitHub issues URL
+            // Fetch current repository's GitHub issues
             try {
                 const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/github/issues', window.location.origin);
                 
-                // If no specific repo path, use AirGit itself
                 if (repoPath) {
                     url.searchParams.append('repoPath', repoPath);
                 } else {
@@ -939,6 +943,66 @@
                     issuesRepoName.textContent = `${data.owner}/${data.repo}`;
                     issuesRemoteUrl.textContent = data.remoteUrl;
                     currentIssuesUrl = data.issuesUrl;
+                    
+                    // Display issues list
+                    if (data.issues && data.issues.length > 0) {
+                        const issuesList = document.getElementById('issues-list');
+                        issuesList.innerHTML = data.issues.map(issue => `
+                            <div class="bg-white border border-sky-200 rounded p-3 hover:bg-sky-50 transition-colors">
+                                <div class="flex justify-between items-start gap-2">
+                                    <div class="flex-1">
+                                        <div class="font-semibold text-sky-700">#${issue.number} ${issue.title}</div>
+                                        <div class="text-xs text-gray-600 mt-1">${issue.body.substring(0, 100)}${issue.body.length > 100 ? '...' : ''}</div>
+                                    </div>
+                                    <button class="agent-run-btn bg-sky-600 hover:bg-sky-500 text-white text-xs px-3 py-1 rounded transition-colors whitespace-nowrap" data-issue-number="${issue.number}" data-issue-title="${issue.title.replace(/"/g, '&quot;')}" data-issue-body="${issue.body.replace(/"/g, '&quot;')}">
+                                        🤖 Agent
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        // Attach event listeners to agent buttons
+                        document.querySelectorAll('.agent-run-btn').forEach(btn => {
+                            btn.addEventListener('click', async (e) => {
+                                e.stopPropagation();
+                                const issueNumber = btn.dataset.issueNumber;
+                                const issueTitle = btn.dataset.issueTitle;
+                                const issueBody = btn.dataset.issueBody;
+                                
+                                btn.disabled = true;
+                                btn.textContent = '⏳ Running...';
+                                
+                                try {
+                                    const response = await fetch('/api/agent/process', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            issue_number: parseInt(issueNumber),
+                                            issue_title: issueTitle,
+                                            issue_body: issueBody
+                                        })
+                                    });
+                                    
+                                    if (response.ok) {
+                                        btn.textContent = '✅ Done';
+                                        btn.classList.add('bg-green-600', 'hover:bg-green-500');
+                                        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                    } else {
+                                        btn.textContent = '❌ Error';
+                                        btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                                        btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                    }
+                                } catch (error) {
+                                    btn.textContent = '❌ Error';
+                                    btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                                    btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                                    console.error('Agent execution error:', error);
+                                }
+                            });
+                        });
+                    } else {
+                        document.getElementById('issues-list').innerHTML = '<div class="text-center text-gray-600 text-sm py-4">No open issues found</div>';
+                    }
                 } else {
                     showIssuesError(data.error || 'Could not detect GitHub repository');
                 }
@@ -946,6 +1010,10 @@
                 console.error('Issues load error:', error);
                 showIssuesError('Connection error: ' + error.message);
             }
+        });
+        
+        document.getElementById('issues-refresh-btn').addEventListener('click', () => {
+            issuesBtn.click();
         });
 
         issuesModalCloseBtn.addEventListener('click', () => {
