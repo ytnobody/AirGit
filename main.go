@@ -2284,57 +2284,67 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		gitCmd("pull", "origin", branchName)
 	}
 
-	// Create implementation file
-	implContent := fmt.Sprintf(`// Implementation for issue #%d: %s
-package main
+	// Create prompt for Copilot CLI
+	prompt := fmt.Sprintf(`You are a code implementation assistant. Please analyze and implement the solution for GitHub issue #%d.
 
-// TODO: Implement solution for this issue
-// Issue Body:
-// %s
-`, issueNumber, issueTitle, issueBody)
+Issue Title: %s
 
-	implFileName := fmt.Sprintf("ISSUE_%d_IMPLEMENTATION.go", issueNumber)
-	implFilePath := filepath.Join(config.RepoPath, implFileName)
+Issue Description:
+%s
+
+Instructions:
+1. Analyze the issue and understand what needs to be implemented
+2. Write clean, production-ready code that solves this issue
+3. Follow the existing code style and conventions in the repository
+4. Add appropriate tests if needed
+5. Update any relevant documentation
+6. Make sure all changes are properly committed
+
+Please implement the complete solution.`, issueNumber, issueTitle, issueBody)
+
+	log.Printf("Creating implementation file and commit...")
 	
-	if err := os.WriteFile(implFilePath, []byte(implContent), 0644); err != nil {
-		log.Printf("Failed to write implementation file: %v", err)
-		agentStatusMutex.Lock()
-		agentStatus[issueNumber] = AgentStatus{
-			IssueNumber: issueNumber,
-			Status:      "failed",
-			Message:     fmt.Sprintf("Failed to create implementation file: %v", err),
-			StartTime:   time.Now().Add(-1 * time.Minute),
-			EndTime:     time.Now(),
-		}
-		agentStatusMutex.Unlock()
-		return
-	}
+	// Create a marker file to track the issue
+	markerContent := fmt.Sprintf(`Issue #%d Implementation
+Title: %s
+Status: In Progress
 
-	// Stage and commit changes
-	gitCmd("add", implFileName)
-	commitMsg := fmt.Sprintf("feat: Auto-generated changes for issue #%d", issueNumber)
-	if err := gitCmd("commit", "-m", commitMsg); err != nil {
-		log.Printf("Commit failed: %v", err)
-		agentStatusMutex.Lock()
-		agentStatus[issueNumber] = AgentStatus{
-			IssueNumber: issueNumber,
-			Status:      "failed",
-			Message:     "Failed to commit changes",
-			StartTime:   time.Now().Add(-1 * time.Minute),
-			EndTime:     time.Now(),
-		}
-		agentStatusMutex.Unlock()
-		return
+The Copilot CLI will implement the solution based on the issue description.
+`, issueNumber, issueTitle)
+	
+	markerFile := filepath.Join(config.RepoPath, fmt.Sprintf(".issue-%d-marker", issueNumber))
+	if err := os.WriteFile(markerFile, []byte(markerContent), 0644); err != nil {
+		log.Printf("Failed to write marker file: %v", err)
 	}
-
-	// Push branch
-	if err := gitCmd("push", "-u", "origin", branchName); err != nil {
-		log.Printf("Push failed: %v", err)
+	defer os.Remove(markerFile)
+	
+	// Call Copilot CLI to implement the solution
+	log.Printf("Invoking Copilot CLI with /delegate command for issue #%d", issueNumber)
+	
+	// Use copilot /delegate to generate implementation
+	copilotCmd := exec.Command("copilot", "/delegate", "--prompt", prompt)
+	copilotCmd.Dir = config.RepoPath
+	copilotCmd.Env = append(os.Environ(), "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin")
+	
+	var copilotOut bytes.Buffer
+	var copilotErr bytes.Buffer
+	copilotCmd.Stdout = &copilotOut
+	copilotCmd.Stderr = &copilotErr
+	
+	err := copilotCmd.Run()
+	copilotOutput := copilotOut.String()
+	copilotError := copilotErr.String()
+	
+	log.Printf("Copilot output: %s", copilotOutput)
+	log.Printf("Copilot error: %s", copilotError)
+	
+	if err != nil {
+		log.Printf("Copilot CLI error: %v", err)
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
 			Status:      "failed",
-			Message:     "Failed to push branch",
+			Message:     fmt.Sprintf("Copilot implementation failed: %v", err),
 			StartTime:   time.Now().Add(-1 * time.Minute),
 			EndTime:     time.Now(),
 		}
