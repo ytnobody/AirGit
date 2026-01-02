@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -2808,8 +2809,13 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	}
 	
 	log.Printf("Using copilot at: %s", copilotPath)
+	log.Printf("Copilot prompt: %s", prompt)
 	
-	ghCmd := exec.Command(copilotPath, "--allow-all-tools")
+	// Add timeout context (10 minutes)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	
+	ghCmd := exec.CommandContext(ctx, copilotPath, "--allow-all-tools")
 	ghCmd.Dir = worktreePath
 	ghCmd.Env = env
 	ghCmd.Stdin = strings.NewReader(prompt)
