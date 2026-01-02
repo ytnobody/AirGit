@@ -2438,6 +2438,8 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	hasScopeError := strings.Contains(output, "403") || strings.Contains(output, "forbidden")
 	hasNotFoundError := strings.Contains(output, "command not found") || strings.Contains(output, "No such file")
 	
+	var isAuthenticated bool
+	
 	// If copilot CLI not found, definitely not authenticated
 	if hasNotFoundError {
 		isAuthenticated = false
