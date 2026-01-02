@@ -1865,13 +1865,46 @@
             githubAuthBtn.disabled = true;
             githubAuthBtnText.classList.add('hidden');
             githubAuthSpinner.classList.remove('hidden');
-            githubAuthMessage.textContent = 'Fetching authentication instructions...';
+            githubAuthMessage.textContent = 'Starting GitHub authentication...';
 
             try {
                 const response = await fetch('/api/github/auth/login', { method: 'POST' });
                 const data = await response.json();
 
-                if (data.success) {
+                if (data.success && data.device_flow) {
+                    // Show device code and URL
+                    githubAuthBadge.textContent = 'Authentication Required';
+                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700';
+                    
+                    githubAuthMessage.innerHTML = `
+                        <div class="space-y-2">
+                            <p class="font-semibold">Please authenticate with GitHub:</p>
+                            <div class="bg-white p-3 rounded border border-sky-300">
+                                <p class="text-xs mb-1">1. Your one-time code:</p>
+                                <p class="font-mono text-lg font-bold text-sky-700 select-all">${data.code}</p>
+                            </div>
+                            <div class="bg-white p-2 rounded border border-sky-300">
+                                <p class="text-xs mb-1">2. Click to open GitHub:</p>
+                                <a href="${data.url}" target="_blank" class="text-sky-600 hover:text-sky-800 underline text-sm break-all">${data.url}</a>
+                            </div>
+                            <p class="text-xs">After authenticating, click "Check Status" below.</p>
+                        </div>
+                    `;
+                    
+                    githubAuthBtn.disabled = false;
+                    githubAuthBtn.className = 'w-full bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    githubAuthBtnText.textContent = 'Check Status';
+                    githubAuthBtnText.classList.remove('hidden');
+                    githubAuthSpinner.classList.add('hidden');
+                    
+                    // Change button behavior to check status
+                    const originalHandler = githubAuthBtn.onclick;
+                    githubAuthBtn.onclick = async () => {
+                        githubAuthBtn.onclick = originalHandler;
+                        await loadGitHubAuthStatus();
+                        githubAuthBtnText.textContent = 'Authenticate with GitHub';
+                    };
+                } else if (data.success) {
                     githubAuthBadge.textContent = '✓ Authenticated';
                     githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
                     githubAuthMessage.textContent = '✓ Authentication successful!';
@@ -1879,23 +1912,6 @@
                     githubAuthBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
                     githubAuthBtnText.textContent = '✓ Authenticated';
                     githubAuthSpinner.classList.add('hidden');
-                } else if (data.instructions) {
-                    // Show manual authentication instructions
-                    githubAuthBadge.textContent = 'Manual Auth Required';
-                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700';
-                    githubAuthMessage.innerHTML = '<div class="whitespace-pre-wrap text-left">' + data.details.replace(/\n/g, '<br>') + '</div>';
-                    githubAuthBtn.disabled = false;
-                    githubAuthBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
-                    githubAuthBtnText.textContent = 'Refresh Status';
-                    githubAuthBtnText.classList.remove('hidden');
-                    githubAuthSpinner.classList.add('hidden');
-                    
-                    // Change button behavior to refresh status instead
-                    githubAuthBtn.onclick = () => {
-                        loadGitHubAuthStatus();
-                        githubAuthBtn.onclick = null; // Reset to default behavior
-                        githubAuthBtnText.textContent = 'Authenticate with GitHub';
-                    };
                 } else {
                     githubAuthBadge.textContent = 'Failed';
                     githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';

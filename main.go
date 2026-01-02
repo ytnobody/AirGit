@@ -2452,23 +2452,54 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("handleGitHubAuthLogin: Providing authentication instructions")
+	log.Printf("handleGitHubAuthLogin: Starting GitHub device flow authentication")
 
-	// Instead of running the command directly, provide instructions to the user
-	instructions := `To authenticate GitHub CLI for Copilot features:
-
-1. Open a terminal on the server
-2. Run: gh auth login --web -h github.com
-3. Follow the browser authentication flow
-4. Refresh this page to verify authentication
-
-Alternatively, you can run this command directly on the AirGit server.`
-
+	// Start gh auth login in background to get device code
+	cmd := exec.Command("bash", "-c", `echo | timeout 10 gh auth login 2>&1`)
+	
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	
+	err := cmd.Run()
+	output := out.String()
+	
+	log.Printf("gh auth login output: %s", output)
+	
+	// Parse the one-time code and URL from output
+	var code, url string
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "one-time code:") {
+			parts := strings.Split(line, ":")
+			if len(parts) >= 2 {
+				code = strings.TrimSpace(parts[len(parts)-1])
+			}
+		} else if strings.Contains(line, "https://github.com/login/device") {
+			url = strings.TrimSpace(line)
+			url = strings.TrimPrefix(url, "Open this URL to continue in your web browser: ")
+		}
+	}
+	
+	if code == "" || url == "" {
+		log.Printf("Failed to parse device code from output")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Failed to start device flow authentication",
+			"success": false,
+			"output":  output,
+		})
+		return
+	}
+	
+	log.Printf("Device flow started: code=%s, url=%s", code, url)
+	
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":      false,
-		"instructions": true,
-		"message":      "Manual authentication required",
-		"details":      instructions,
+		"success":     true,
+		"device_flow": true,
+		"code":        code,
+		"url":         url,
+		"message":     "Please authenticate using the provided code",
 	})
 }
 
