@@ -76,8 +76,18 @@ var agentStatus map[int]AgentStatus // issueNumber -> status
 var agentStatusMutex sync.Mutex
 
 func init() {
+	// Determine default RepoPath
+	defaultRepoPath := os.Getenv("HOME")
+	
+	// If current directory is a git repository, use it as default
+	if cwd, err := os.Getwd(); err == nil {
+		if isGitRepo(cwd) {
+			defaultRepoPath = cwd
+		}
+	}
+	
 	config = Config{
-		RepoPath:   getEnv("AIRGIT_REPO_PATH", os.Getenv("HOME")),
+		RepoPath:   getEnv("AIRGIT_REPO_PATH", defaultRepoPath),
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
 		ListenPort: getEnv("AIRGIT_LISTEN_PORT", "8080"),
 		TLSCert:    getEnv("AIRGIT_TLS_CERT", ""),
@@ -87,6 +97,15 @@ func init() {
 	agentStatus = make(map[int]AgentStatus)
 
 	log.Printf("Config: RepoPath=%s", config.RepoPath)
+}
+
+func isGitRepo(path string) bool {
+	gitPath := filepath.Join(path, ".git")
+	if info, err := os.Stat(gitPath); err == nil {
+		// .git can be either a directory or a file (for worktrees)
+		return info.IsDir() || info.Mode().IsRegular()
+	}
+	return false
 }
 
 func getEnv(key, defaultVal string) string {
