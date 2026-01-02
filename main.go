@@ -228,6 +228,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/issue/create", handleCreateGitHubIssue)
 	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
 	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
@@ -2613,6 +2614,98 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 		"code":        code,
 		"url":         url,
 		"message":     "Please authenticate using the provided code",
+	})
+}
+
+func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
+		return
+	}
+
+	var req struct {
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		RepoPath    string `json:"repoPath"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid request body"})
+		return
+	}
+
+	if strings.TrimSpace(req.Title) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "Title is required"})
+		return
+	}
+
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if req.RepoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(req.RepoPath) {
+			resolvedPath = req.RepoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, req.RepoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	// Build gh command
+	args := []string{"issue", "create", "--title", req.Title}
+	if strings.TrimSpace(req.Body) != "" {
+		args = append(args, "--body", req.Body)
+	}
+
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = config.RepoPath
+	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
+
+	var output bytes.Buffer
+	var errOutput bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &errOutput
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("gh issue create error: %v, stderr: %s", err, errOutput.String())
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Failed to create issue: " + strings.TrimSpace(errOutput.String()),
+		})
+		return
+	}
+
+	// Parse the output to extract issue number
+	outputStr := strings.TrimSpace(output.String())
+	issueNumber := ""
+	// gh typically outputs something like "https://github.com/owner/repo/issues/123"
+	parts := strings.Split(outputStr, "/")
+	if len(parts) > 0 {
+		issueNumber = parts[len(parts)-1]
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Issue created successfully",
+		"issue":   issueNumber,
+		"output":  outputStr,
 	})
 }
 
