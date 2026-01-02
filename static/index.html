@@ -299,6 +299,27 @@
                         </button>
                     </div>
 
+                    <!-- Rebuild & Restart Section -->
+                    <div class="border border-sky-200 rounded p-4 bg-white/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-700">Rebuild & Restart</h3>
+                                <p class="text-xs text-gray-600 mt-1">Build and restart the service</p>
+                            </div>
+                            <div id="rebuild-status-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
+                                Ready
+                            </div>
+                        </div>
+                        <div id="rebuild-status-message" class="text-xs text-gray-600 mb-3"></div>
+                        <button id="rebuild-restart-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                            <span id="rebuild-btn-text">🔨 Build & Restart</span>
+                            <svg id="rebuild-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
                     <!-- PWA Install Section -->
                     <div id="pwa-section" class="border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
@@ -1983,6 +2004,67 @@
         settingsBtn.addEventListener('click', () => {
             loadServiceStatus();
             initializePWAInstall();
+        });
+
+        // Rebuild & Restart Features
+        const rebuildRestartBtn = document.getElementById('rebuild-restart-btn');
+        const rebuildBtnText = document.getElementById('rebuild-btn-text');
+        const rebuildSpinner = document.getElementById('rebuild-spinner');
+        const rebuildStatusBadge = document.getElementById('rebuild-status-badge');
+        const rebuildStatusMessage = document.getElementById('rebuild-status-message');
+
+        rebuildRestartBtn.addEventListener('click', async () => {
+            rebuildRestartBtn.disabled = true;
+            rebuildBtnText.classList.add('hidden');
+            rebuildSpinner.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/systemd/rebuild-restart', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // Success
+                    rebuildStatusBadge.textContent = '✓ Success';
+                    rebuildStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    rebuildStatusMessage.textContent = '✓ Build successful and service restarted!';
+                    rebuildRestartBtn.disabled = true;
+                    rebuildRestartBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    rebuildBtnText.textContent = '✓ Done';
+                    rebuildSpinner.classList.add('hidden');
+                    
+                    // Re-enable after 3 seconds
+                    setTimeout(() => {
+                        rebuildStatusBadge.textContent = 'Ready';
+                        rebuildStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600';
+                        rebuildStatusMessage.textContent = '';
+                        rebuildRestartBtn.disabled = false;
+                        rebuildRestartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                        rebuildBtnText.classList.remove('hidden');
+                        rebuildBtnText.textContent = '🔨 Build & Restart';
+                    }, 3000);
+                } else {
+                    // Error
+                    rebuildStatusMessage.textContent = '✗ Error: ' + (data.error || 'Build or restart failed');
+                    if (data.details) {
+                        rebuildStatusMessage.textContent += '\n' + data.details.substring(0, 200);
+                    }
+                    rebuildStatusBadge.textContent = 'Error';
+                    rebuildStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
+                    rebuildBtnText.classList.remove('hidden');
+                    rebuildSpinner.classList.add('hidden');
+                    rebuildRestartBtn.disabled = false;
+                    rebuildRestartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                }
+            } catch (error) {
+                console.error('Error rebuilding and restarting:', error);
+                rebuildStatusMessage.textContent = '✗ Network error: ' + error.message;
+                rebuildStatusBadge.textContent = 'Error';
+                rebuildStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
+                rebuildBtnText.classList.remove('hidden');
+                rebuildSpinner.classList.add('hidden');
+                rebuildRestartBtn.disabled = false;
+                rebuildRestartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+            }
         });
 
         // PWA Install Features
