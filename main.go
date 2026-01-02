@@ -2723,7 +2723,15 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}()
 
 	// Check if GitHub CLI is authenticated before proceeding
+	// Filter out GH_TOKEN to check OAuth token
+	authEnv := []string{}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GH_TOKEN=") {
+			authEnv = append(authEnv, e)
+		}
+	}
 	authCheckCmd := exec.Command("gh", "auth", "status")
+	authCheckCmd.Env = authEnv
 	if err := authCheckCmd.Run(); err != nil {
 		log.Printf("GitHub authentication check failed: %v", err)
 		agentStatusMutex.Lock()
@@ -2748,9 +2756,17 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	log.Printf("Invoking gh copilot for issue #%d", issueNumber)
 	
 	// Use gh copilot suggest to get implementation suggestions
+	// IMPORTANT: Filter out GH_TOKEN from environment to use OAuth token
+	env := []string{}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GH_TOKEN=") {
+			env = append(env, e)
+		}
+	}
+	
 	ghCmd := exec.Command("gh", "copilot", "suggest", "-t", "shell", prompt)
 	ghCmd.Dir = worktreePath
-	ghCmd.Env = os.Environ()
+	ghCmd.Env = env
 
 	var ghOut bytes.Buffer
 	var ghErr bytes.Buffer
