@@ -3187,12 +3187,14 @@ Implementation in progress - This is a placeholder that should be replaced with 
 
 	updateProgress("Creating pull request...")
 	// Create PR using gh CLI
+	// Note: PR creation doesn't need to be in the worktree directory
+	// Use main repo path instead to avoid permission issues
 	log.Printf("Creating PR for issue #%d", issueNumber)
 	prTitle := fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle)
 	prBody := fmt.Sprintf("Fixes #%d\n\nAuto-generated implementation by AirGit agent.\n\n## Changes\n\nSee implementation file for details.", issueNumber)
 	
 	prCmd := exec.Command("gh", "pr", "create", "--title", prTitle, "--body", prBody, "--base", defaultBranch, "--head", branchName)
-	prCmd.Dir = worktreePath
+	prCmd.Dir = repoPath // Use main repo path, not worktree
 	prCmd.Env = os.Environ()
 
 	var prOut bytes.Buffer
