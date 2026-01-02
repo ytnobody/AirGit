@@ -1049,6 +1049,14 @@
                     btn.disabled = true;
                     btn.textContent = '⏳ Running...';
                     
+                    // Get progress element and show initial message immediately
+                    const progressEl = document.querySelector(`.agent-progress-${issueNumber}`);
+                    if (progressEl) {
+                        progressEl.textContent = '⚙️ Starting agent process...';
+                        progressEl.classList.remove('hidden', 'text-red-600');
+                        progressEl.classList.add('text-sky-600');
+                    }
+                    
                     try {
                         const response = await fetch('/api/agent/process', {
                             method: 'POST',
@@ -1061,11 +1069,8 @@
                         });
                         
                         if (response.ok) {
-                            // Get progress element
-                            const progressEl = document.querySelector(`.agent-progress-${issueNumber}`);
-                            
                             // Poll for status
-                            let maxAttempts = 300; // 5 minutes (300 seconds)
+                            let maxAttempts = 150; // 5 minutes (150 * 2 seconds)
                             const pollInterval = setInterval(async () => {
                                 maxAttempts--;
                                 if (maxAttempts <= 0) {
@@ -1107,8 +1112,10 @@
                                             btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
                                             btn.disabled = false;
                                             if (progressEl) {
-                                                progressEl.textContent = '✗ ' + status.message;
-                                                progressEl.classList.remove('text-sky-600');
+                                                // Show full error message in progress element
+                                                const errorText = status.message || 'Unknown error';
+                                                progressEl.innerHTML = `<span class="font-semibold">✗ Error:</span><br><span class="whitespace-pre-wrap">${errorText}</span>`;
+                                                progressEl.classList.remove('text-sky-600', 'hidden');
                                                 progressEl.classList.add('text-red-600');
                                             }
                                             if (status.message) {
@@ -1123,7 +1130,7 @@
                                 } catch (err) {
                                     console.error('Status polling error:', err);
                                 }
-                            }, 5000); // Poll every 5 seconds
+                            }, 2000); // Poll every 2 seconds
                         } else {
                             btn.textContent = '❌ Error';
                             btn.classList.add('bg-red-600', 'hover:bg-red-500');

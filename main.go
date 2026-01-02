@@ -2829,7 +2829,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 
 Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 
-	updateProgress("Analyzing issue and generating implementation with AI...")
+	updateProgress("Invoking GitHub Copilot CLI to analyze issue and generate implementation...")
 	log.Printf("Invoking copilot CLI for issue #%d", issueNumber)
 	
 	// Use new copilot CLI (not gh extension)
@@ -2867,7 +2867,27 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	ghCmd.Stdout = &ghOut
 	ghCmd.Stderr = &ghErr
 
+	// Update progress periodically during Copilot execution
+	progressTicker := time.NewTicker(10 * time.Second)
+	copilotDone := make(chan bool)
+	go func() {
+		elapsed := 0
+		for {
+			select {
+			case <-progressTicker.C:
+				elapsed += 10
+				updateProgress(fmt.Sprintf("Copilot is analyzing (running for %d seconds)...", elapsed))
+			case <-copilotDone:
+				progressTicker.Stop()
+				return
+			}
+		}
+	}()
+
 	err := ghCmd.Run()
+	close(copilotDone)
+	progressTicker.Stop()
+	
 	ghOutput := ghOut.String()
 	ghError := ghErr.String()
 
@@ -2878,24 +2898,43 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	
 	if err != nil {
 		log.Printf("gh copilot error: %v", err)
-		errorMsg := fmt.Sprintf("Copilot command failed: %v", err)
+		
+		// Build detailed error message
+		errorMsg := "Copilot command failed"
+		errorDetails := []string{}
+		
+		if err != nil {
+			errorDetails = append(errorDetails, fmt.Sprintf("Exit error: %v", err))
+		}
+		
 		if ghError != "" {
-			errorMsg = fmt.Sprintf("Copilot error: %s", ghError)
-			// Check for subscription or access issues
+			errorDetails = append(errorDetails, fmt.Sprintf("Stderr: %s", ghError))
+			
+			// Check for specific error patterns
 			if strings.Contains(ghError, "code: 400") || strings.Contains(ghError, "internal server error") {
-				errorMsg = "GitHub Copilot CLI returned error 400.\n\n" +
-					"This may be caused by:\n" +
-					"1. CLI version compatibility issue (gh-copilot v1.1.1 may have API limitations)\n" +
-					"2. Copilot Pro+ features not fully supported in CLI\n" +
-					"3. Rate limiting or temporary API issues\n\n" +
-					"The Agent feature is currently not available. Please check GitHub status or try again later."
+				errorMsg = "GitHub Copilot CLI returned error 400"
+				errorDetails = append(errorDetails, "\nPossible causes:",
+					"• CLI version compatibility issue",
+					"• Copilot Pro+ features not fully supported in CLI",
+					"• Rate limiting or temporary API issues",
+					"\nThe Agent feature may not be available currently.")
+			} else if strings.Contains(ghError, "OAuth") || strings.Contains(ghError, "not authenticated") {
+				errorMsg = "Authentication error"
+				errorDetails = append(errorDetails, "\nPlease authenticate via Settings.")
 			}
 		}
+		
+		if ghOutput != "" && len(ghOutput) < 500 {
+			errorDetails = append(errorDetails, fmt.Sprintf("Output: %s", ghOutput))
+		}
+		
+		fullErrorMsg := fmt.Sprintf("%s\n\n%s", errorMsg, strings.Join(errorDetails, "\n"))
+		
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
 			Status:      "failed",
-			Message:     errorMsg,
+			Message:     fullErrorMsg,
 			StartTime:   startTime,
 			EndTime:     time.Now(),
 		}
@@ -3033,34 +3072,44 @@ Implementation in progress - This is a placeholder that should be replaced with 
 
 
 func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 
-if r.Method != http.MethodPost {
-w.WriteHeader(http.StatusMethodNotAllowed)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
-return
-}
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
+		return
+	}
 
-var payload struct {
-IssueNumber int    `json:"issue_number"`
-IssueTitle  string `json:"issue_title"`
-IssueBody   string `json:"issue_body"`
-}
+	var payload struct {
+		IssueNumber int    `json:"issue_number"`
+		IssueTitle  string `json:"issue_title"`
+		IssueBody   string `json:"issue_body"`
+	}
 
-if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
-return
-}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+		return
+	}
 
-log.Printf("Agent process started: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+	log.Printf("Agent process started: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
+	
+	// Initialize status immediately so polling can start
+	agentStatusMutex.Lock()
+	agentStatus[payload.IssueNumber] = AgentStatus{
+		IssueNumber: payload.IssueNumber,
+		Status:      "pending",
+		Message:     "Agent process queued",
+		StartTime:   time.Now(),
+	}
+	agentStatusMutex.Unlock()
 
-go func() {
-log.Printf("Agent goroutine started for issue #%d", payload.IssueNumber)
-processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
-}()
+	go func() {
+		log.Printf("Agent goroutine started for issue #%d", payload.IssueNumber)
+		processAgentIssue(payload.IssueNumber, payload.IssueTitle, payload.IssueBody)
+	}()
 
-json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Agent processing started"})
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Agent processing started"})
 }
 
 func handleAgentStatus(w http.ResponseWriter, r *http.Request) {
