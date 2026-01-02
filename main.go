@@ -115,6 +115,39 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
+// resolveAndValidateRepoPath resolves a repository path and validates it's within the base path and is a git repo
+func resolveAndValidateRepoPath(repoPath, basePath string) (string, bool) {
+	if repoPath == "" {
+		return "", false
+	}
+	
+	var resolvedPath string
+	if filepath.IsAbs(repoPath) {
+		resolvedPath = repoPath
+	} else {
+		resolvedPath = filepath.Join(basePath, repoPath)
+	}
+	
+	var err error
+	resolvedPath, err = filepath.Abs(resolvedPath)
+	if err != nil {
+		return "", false
+	}
+	
+	basePathAbs, _ := filepath.Abs(basePath)
+	// Check if resolved path is within base path
+	if !strings.HasPrefix(resolvedPath, basePathAbs+string(filepath.Separator)) && resolvedPath != basePathAbs {
+		return "", false
+	}
+	
+	// Check if it's a valid git repository
+	if !isGitRepo(resolvedPath) {
+		return "", false
+	}
+	
+	return resolvedPath, true
+}
+
 func main() {
 	var showHelp bool
 	var showVersion bool
@@ -319,20 +352,8 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
-		// Resolve and validate the path
-		var resolvedPath string
-		var err error
-		if filepath.IsAbs(repoPath) {
-			resolvedPath = repoPath
-		} else {
-			resolvedPath = filepath.Join(originalRepoPath, repoPath)
-		}
-		resolvedPath, err = filepath.Abs(resolvedPath)
-		if err == nil {
-			basePath, _ := filepath.Abs(originalRepoPath)
-			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
-				config.RepoPath = resolvedPath
-			}
+		if validPath, ok := resolveAndValidateRepoPath(repoPath, originalRepoPath); ok {
+			config.RepoPath = validPath
 		}
 	}
 

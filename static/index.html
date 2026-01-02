@@ -527,11 +527,8 @@
 
         async function loadStatus() {
             try {
-                const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/status', window.location.origin);
-                if (repoPath) {
-                    url.searchParams.append('repoPath', repoPath);
-                }
+                // Don't send repoPath parameter - use server's default config.RepoPath
                 const response = await fetch(url.toString());
                 const data = await response.json();
                 if (response.ok) {
