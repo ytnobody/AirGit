@@ -33,16 +33,16 @@ type Config struct {
 }
 
 type Response struct {
-	Branch   string      `json:"branch,omitempty"`
-	RepoName string      `json:"repoName,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	Log      []string    `json:"log,omitempty"`
-	Commit   string      `json:"commit,omitempty"`
-	Branches []string    `json:"branches,omitempty"`
-	Tags     []string    `json:"tags,omitempty"`
-	Remotes  []string    `json:"remotes,omitempty"`
-	Ahead    int         `json:"ahead,omitempty"`
-	Behind   int         `json:"behind,omitempty"`
+	Branch   string       `json:"branch,omitempty"`
+	RepoName string       `json:"repoName,omitempty"`
+	Error    string       `json:"error,omitempty"`
+	Log      []string     `json:"log,omitempty"`
+	Commit   string       `json:"commit,omitempty"`
+	Branches []string     `json:"branches,omitempty"`
+	Tags     []string     `json:"tags,omitempty"`
+	Remotes  []string     `json:"remotes,omitempty"`
+	Ahead    int          `json:"ahead,omitempty"`
+	Behind   int          `json:"behind,omitempty"`
 	Commits  []CommitInfo `json:"commits,omitempty"`
 }
 
@@ -81,14 +81,14 @@ var githubAuthMutex sync.Mutex
 func init() {
 	// Determine default RepoPath
 	defaultRepoPath := os.Getenv("HOME")
-	
+
 	// If current directory is a git repository, use it as default
 	if cwd, err := os.Getwd(); err == nil {
 		if isGitRepo(cwd) {
 			defaultRepoPath = cwd
 		}
 	}
-	
+
 	config = Config{
 		RepoPath:   getEnv("AIRGIT_REPO_PATH", defaultRepoPath),
 		ListenAddr: getEnv("AIRGIT_LISTEN_ADDR", "0.0.0.0"),
@@ -123,31 +123,31 @@ func resolveAndValidateRepoPath(repoPath, basePath string) (string, bool) {
 	if repoPath == "" {
 		return "", false
 	}
-	
+
 	var resolvedPath string
 	if filepath.IsAbs(repoPath) {
 		resolvedPath = repoPath
 	} else {
 		resolvedPath = filepath.Join(basePath, repoPath)
 	}
-	
+
 	var err error
 	resolvedPath, err = filepath.Abs(resolvedPath)
 	if err != nil {
 		return "", false
 	}
-	
+
 	basePathAbs, _ := filepath.Abs(basePath)
 	// Check if resolved path is within base path
 	if !strings.HasPrefix(resolvedPath, basePathAbs+string(filepath.Separator)) && resolvedPath != basePathAbs {
 		return "", false
 	}
-	
+
 	// Check if it's a valid git repository
 	if !isGitRepo(resolvedPath) {
 		return "", false
 	}
-	
+
 	return resolvedPath, true
 }
 
@@ -228,6 +228,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/issues/create", handleCreateGitHubIssue)
 	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
 	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
@@ -236,7 +237,7 @@ func main() {
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
-	
+
 	// Determine if using TLS
 	if config.TLSCert != "" && config.TLSKey != "" {
 		log.Printf("Starting AirGit on https://%s (with TLS)", addr)
@@ -353,7 +354,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -407,7 +408,7 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 	if remote == "" {
 		remote = "origin"
 	}
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -494,7 +495,7 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 	if remote == "" {
 		remote = "origin"
 	}
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -562,7 +563,6 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 		Log:    logs,
 	})
 }
-
 
 func handleListRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -664,7 +664,7 @@ func handleCreateBranch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -798,7 +798,6 @@ func getAheadBehind(branch string) (int, int) {
 	return 0, 0
 }
 
-
 func listRepositories(basePath string) ([]Repository, error) {
 	var repos []Repository
 
@@ -866,7 +865,7 @@ func handleListBranches(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -933,7 +932,7 @@ func handleCheckoutBranch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -1140,7 +1139,7 @@ func handleInit(w http.ResponseWriter, r *http.Request) {
 		output, err := executeGitCommand("checkout", branch)
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": fmt.Sprintf("Failed to checkout branch '%s': %v. Output: %s", branch, err, output),
+				"error":  fmt.Sprintf("Failed to checkout branch '%s': %v. Output: %s", branch, err, output),
 				"branch": currentBranch,
 			})
 			return
@@ -1167,8 +1166,8 @@ func handleCreateRepo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req struct {
-		RepoName  string `json:"repoName"`
-		Subdirs   string `json:"subdirs"`
+		RepoName string `json:"repoName"`
+		Subdirs  string `json:"subdirs"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1382,7 +1381,7 @@ func handleListRemotes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -1418,13 +1417,13 @@ func handleListRemotes(w http.ResponseWriter, r *http.Request) {
 
 	var remotes []RemoteInfo
 	remoteMap := make(map[string]string)
-	
+
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		parts := strings.Fields(line)
 		if len(parts) >= 2 {
 			name := parts[0]
@@ -1434,7 +1433,7 @@ func handleListRemotes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	for name, url := range remoteMap {
 		remotes = append(remotes, RemoteInfo{
 			Name: name,
@@ -2054,7 +2053,7 @@ func handleListTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -2178,7 +2177,7 @@ func handlePushTag(w http.ResponseWriter, r *http.Request) {
 	if remote == "" {
 		remote = "origin"
 	}
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -2263,7 +2262,7 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	repoPath := r.URL.Query().Get("repoPath")
-	
+
 	// Use provided repoPath or fall back to config.RepoPath
 	originalRepoPath := config.RepoPath
 	if repoPath != "" {
@@ -2314,18 +2313,18 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("gh", "issue", "list", "--json", "number,title,body,author,assignees", "-L", "50")
 	cmd.Dir = config.RepoPath
 	cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+os.Getenv("GITHUB_TOKEN"))
-	
+
 	var issuesOutput bytes.Buffer
 	var issuesError bytes.Buffer
 	cmd.Stdout = &issuesOutput
 	cmd.Stderr = &issuesError
-	
+
 	log.Printf("gh command: cwd=%s, owner=%s, repo=%s", config.RepoPath, owner, repo)
-	
+
 	if err := cmd.Run(); err != nil {
 		errMsg := strings.TrimSpace(issuesError.String())
 		log.Printf("gh issue list error: %v, stderr: %s", err, errMsg)
-		
+
 		// Return error message to UI
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"owner":     owner,
@@ -2341,7 +2340,7 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	var issues []map[string]interface{}
 	outputStr := strings.TrimSpace(issuesOutput.String())
 	log.Printf("gh output: %s", outputStr)
-	
+
 	if outputStr == "" {
 		// No issues found
 		issues = []map[string]interface{}{}
@@ -2355,6 +2354,131 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 		"repo":      repo,
 		"remoteUrl": remoteURL,
 		"issues":    issues,
+	})
+}
+
+func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "POST only",
+		})
+		return
+	}
+
+	repoPath := r.URL.Query().Get("repoPath")
+
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var req struct {
+		Title  string   `json:"title"`
+		Body   string   `json:"body"`
+		Labels []string `json:"labels"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	if req.Title == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Title is required",
+		})
+		return
+	}
+
+	// Get GitHub remote URL
+	output, err := executeCommand("git", "config", "--get", "remote.origin.url")
+	if err != nil || strings.TrimSpace(output) == "" {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No GitHub remote found. Make sure 'origin' remote is configured.",
+		})
+		return
+	}
+
+	remoteURL := strings.TrimSpace(output)
+
+	// Parse GitHub URL to extract owner/repo
+	owner, repo := parseGitHubURL(remoteURL)
+	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Could not parse GitHub repository from remote URL: " + remoteURL,
+		})
+		return
+	}
+
+	// Build gh command
+	args := []string{"issue", "create", "--title", req.Title}
+
+	if req.Body != "" {
+		args = append(args, "--body", req.Body)
+	}
+
+	for _, label := range req.Labels {
+		args = append(args, "--label", label)
+	}
+
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = config.RepoPath
+
+	var issueOutput bytes.Buffer
+	var issueError bytes.Buffer
+	cmd.Stdout = &issueOutput
+	cmd.Stderr = &issueError
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(issueError.String())
+		log.Printf("gh issue create error: %v, stderr: %s", err, errMsg)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": errMsg,
+			"owner": owner,
+			"repo":  repo,
+		})
+		return
+	}
+
+	issueURL := strings.TrimSpace(issueOutput.String())
+	log.Printf("Issue created: %s", issueURL)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     issueURL,
+		"owner":   owner,
+		"repo":    repo,
+		"message": fmt.Sprintf("Issue created successfully: %s", issueURL),
 	})
 }
 
@@ -2423,24 +2547,24 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
 		copilotPath = "/usr/local/bin/copilot"
 	}
-	
+
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(`unset GH_TOKEN && echo "test" | timeout 5 %s --allow-all-tools 2>&1`, copilotPath))
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
 	cmd.Run()
-	
+
 	output := out.String()
-	
+
 	// Check for various error conditions
 	hasOAuthError := strings.Contains(output, "OAuth") || strings.Contains(output, "gh auth login") || strings.Contains(output, "not authenticated")
 	hasInternalError := strings.Contains(output, "internal server error")
 	hasScopeError := strings.Contains(output, "403") || strings.Contains(output, "forbidden")
 	hasNotFoundError := strings.Contains(output, "command not found") || strings.Contains(output, "No such file")
-	
+
 	var isAuthenticated bool
-	
+
 	// If copilot CLI not found, definitely not authenticated
 	if hasNotFoundError {
 		isAuthenticated = false
@@ -2449,16 +2573,16 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 		// But internal server error might mean authenticated with wrong subscription
 		isAuthenticated = !hasOAuthError && !hasScopeError
 	}
-	
+
 	// Also check gh auth status for additional info
 	authCmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth status 2>&1`)
 	var authOut bytes.Buffer
 	authCmd.Stdout = &authOut
 	authCmd.Stderr = &authOut
 	authCmd.Run()
-	
+
 	statusOutput := authOut.String()
-	
+
 	// If gh auth status succeeds but copilot fails with internal error, check token scopes
 	if strings.Contains(statusOutput, "Logged in") && hasInternalError {
 		// Check if copilot scope is present
@@ -2467,8 +2591,8 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"authenticated": isAuthenticated,
-		"status":        statusOutput,
+		"authenticated":  isAuthenticated,
+		"status":         statusOutput,
 		"copilot_output": output,
 	})
 }
@@ -2496,7 +2620,7 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Start gh auth login and capture initial output for device code
 	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth login -s copilot 2>&1`)
-	
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Printf("Failed to create stdout pipe: %v", err)
@@ -2558,10 +2682,10 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	// Wait for device code to appear (max 5 seconds)
 	time.Sleep(3 * time.Second)
-	
+
 	outputStr := output.String()
 	log.Printf("gh auth login initial output: %s", outputStr)
-	
+
 	// Parse the one-time code and URL from output
 	var code, url string
 	lines := strings.Split(outputStr, "\n")
@@ -2578,7 +2702,7 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	if code == "" || url == "" {
 		log.Printf("Failed to parse device code from output. code='%s', url='%s'", code, url)
 		cmd.Process.Kill()
@@ -2590,10 +2714,10 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Store the process so it continues running in background
 	githubAuthProcess = cmd
-	
+
 	// Start goroutine to wait for completion
 	go func() {
 		cmd.Wait()
@@ -2604,9 +2728,9 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 		githubAuthMutex.Unlock()
 		log.Printf("GitHub auth process completed")
 	}()
-	
+
 	log.Printf("Device flow started: code=%s, url=%s", code, url)
-	
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":     true,
 		"device_flow": true,
@@ -2652,9 +2776,9 @@ func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 
 func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	log.Printf("processAgentIssue: starting for #%d", issueNumber)
-	
+
 	startTime := time.Now()
-	
+
 	// Update status to running
 	agentStatusMutex.Lock()
 	agentStatus[issueNumber] = AgentStatus{
@@ -2664,17 +2788,17 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		StartTime:   startTime,
 	}
 	agentStatusMutex.Unlock()
-	
+
 	timestamp := time.Now().UnixNano() / 1000000
 	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, timestamp)
 	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent-%d", issueNumber, timestamp))
 	// worktree is created directly at worktreeBasePath, no AirGit subdirectory
 	worktreePath := worktreeBasePath
 	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
-	
+
 	// Get the main repository path (not worktree)
 	repoPath := config.RepoPath
-	
+
 	// Check if current path is a worktree and get the main repo
 	gitDirFile := filepath.Join(repoPath, ".git")
 	if data, err := os.ReadFile(gitDirFile); err == nil {
@@ -2689,9 +2813,9 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 			log.Printf("Detected worktree, using main repo: %s", repoPath)
 		}
 	}
-	
+
 	log.Printf("Using repository path: %s", repoPath)
-	
+
 	// Helper function to update status message
 	updateProgress := func(message string) {
 		agentStatusMutex.Lock()
@@ -2702,9 +2826,9 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		agentStatusMutex.Unlock()
 		log.Printf("Agent progress #%d: %s", issueNumber, message)
 	}
-	
+
 	updateProgress("Cleaning up old worktrees...")
-	
+
 	// Clean up any existing worktree with same issue number (in case of previous failure)
 	cleanupOldWorktrees := func() {
 		entries, err := os.ReadDir("/var/tmp/vibe-kanban/worktrees")
@@ -2726,7 +2850,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		}
 	}
 	cleanupOldWorktrees()
-	
+
 	// Ensure worktree base directory exists
 	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
 		log.Printf("Failed to create worktree base directory: %v", err)
@@ -2741,7 +2865,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		agentStatusMutex.Unlock()
 		return
 	}
-	
+
 	gitCmd := func(args ...string) error {
 		log.Printf("git: %v", args)
 		cmd := exec.Command("git", args...)
@@ -2760,7 +2884,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	if err := gitCmd("fetch", "origin"); err != nil {
 		log.Printf("fetch failed (continuing anyway): %v", err)
 	}
-	
+
 	updateProgress("Determining default branch...")
 	// Get default branch name
 	defaultBranch := "main"
@@ -2770,7 +2894,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 			defaultBranch = parts[len(parts)-1]
 		}
 	}
-	
+
 	updateProgress(fmt.Sprintf("Creating worktree for branch %s...", branchName))
 	// Create git worktree
 	log.Printf("Creating git worktree at %s from %s", worktreePath, defaultBranch)
@@ -2831,7 +2955,7 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 
 	updateProgress("Invoking GitHub Copilot CLI to analyze issue and generate implementation...")
 	log.Printf("Invoking copilot CLI for issue #%d", issueNumber)
-	
+
 	// Use new copilot CLI (not gh extension)
 	// IMPORTANT: Filter out GH_TOKEN from environment to use OAuth token
 	env := []string{}
@@ -2840,23 +2964,23 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 			env = append(env, e)
 		}
 	}
-	
+
 	// Use copilot binary directly with non-interactive mode
 	homeDir, _ := os.UserHomeDir()
 	copilotPath := filepath.Join(homeDir, "bin", "copilot")
-	
+
 	// If not in home bin, try /usr/local/bin
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
 		copilotPath = "/usr/local/bin/copilot"
 	}
-	
+
 	log.Printf("Using copilot at: %s", copilotPath)
 	log.Printf("Copilot prompt: %s", prompt)
-	
+
 	// Add timeout context (10 minutes)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	
+
 	ghCmd := exec.CommandContext(ctx, copilotPath, "--allow-all-tools")
 	ghCmd.Dir = worktreePath
 	ghCmd.Env = env
@@ -2887,7 +3011,7 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	err := ghCmd.Run()
 	close(copilotDone)
 	progressTicker.Stop()
-	
+
 	ghOutput := ghOut.String()
 	ghError := ghErr.String()
 
@@ -2895,21 +3019,21 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	if ghError != "" {
 		log.Printf("gh copilot stderr: %s", ghError)
 	}
-	
+
 	if err != nil {
 		log.Printf("gh copilot error: %v", err)
-		
+
 		// Build detailed error message
 		errorMsg := "Copilot command failed"
 		errorDetails := []string{}
-		
+
 		if err != nil {
 			errorDetails = append(errorDetails, fmt.Sprintf("Exit error: %v", err))
 		}
-		
+
 		if ghError != "" {
 			errorDetails = append(errorDetails, fmt.Sprintf("Stderr: %s", ghError))
-			
+
 			// Check for specific error patterns
 			if strings.Contains(ghError, "code: 400") || strings.Contains(ghError, "internal server error") {
 				errorMsg = "GitHub Copilot CLI returned error 400"
@@ -2923,13 +3047,13 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 				errorDetails = append(errorDetails, "\nPlease authenticate via Settings.")
 			}
 		}
-		
+
 		if ghOutput != "" && len(ghOutput) < 500 {
 			errorDetails = append(errorDetails, fmt.Sprintf("Output: %s", ghOutput))
 		}
-		
+
 		fullErrorMsg := fmt.Sprintf("%s\n\n%s", errorMsg, strings.Join(errorDetails, "\n"))
-		
+
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
@@ -3031,7 +3155,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 	log.Printf("Creating PR for issue #%d", issueNumber)
 	prTitle := fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle)
 	prBody := fmt.Sprintf("Fixes #%d\n\nAuto-generated implementation by AirGit agent.\n\n## Changes\n\nSee implementation file for details.", issueNumber)
-	
+
 	prCmd := exec.Command("gh", "pr", "create", "--title", prTitle, "--body", prBody, "--base", defaultBranch, "--head", branchName)
 	prCmd.Dir = worktreePath
 	prCmd.Env = os.Environ()
@@ -3057,7 +3181,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 
 	prURL := strings.TrimSpace(prOut.String())
 	log.Printf("PR created: %s", prURL)
-	
+
 	agentStatusMutex.Lock()
 	agentStatus[issueNumber] = AgentStatus{
 		IssueNumber: issueNumber,
@@ -3068,8 +3192,6 @@ Implementation in progress - This is a placeholder that should be replaced with 
 	}
 	agentStatusMutex.Unlock()
 }
-
-
 
 func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -3093,7 +3215,7 @@ func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Agent process started: Issue #%d - %s", payload.IssueNumber, payload.IssueTitle)
-	
+
 	// Initialize status immediately so polling can start
 	agentStatusMutex.Lock()
 	agentStatus[payload.IssueNumber] = AgentStatus{
@@ -3113,38 +3235,38 @@ func handleAgentProcess(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAgentStatus(w http.ResponseWriter, r *http.Request) {
-w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 
-if r.Method != http.MethodGet {
-w.WriteHeader(http.StatusMethodNotAllowed)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": "GET only"})
-return
-}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "GET only"})
+		return
+	}
 
-issueNumberStr := r.URL.Query().Get("issue_number")
-if issueNumberStr == "" {
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": "Missing issue_number"})
-return
-}
+	issueNumberStr := r.URL.Query().Get("issue_number")
+	if issueNumberStr == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "Missing issue_number"})
+		return
+	}
 
-issueNumber, err := strconv.Atoi(issueNumberStr)
-if err != nil {
-w.WriteHeader(http.StatusBadRequest)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid issue_number"})
-return
-}
+	issueNumber, err := strconv.Atoi(issueNumberStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid issue_number"})
+		return
+	}
 
-agentStatusMutex.Lock()
-status, exists := agentStatus[issueNumber]
-agentStatusMutex.Unlock()
+	agentStatusMutex.Lock()
+	status, exists := agentStatus[issueNumber]
+	agentStatusMutex.Unlock()
 
-if !exists {
-w.WriteHeader(http.StatusNotFound)
-json.NewEncoder(w).Encode(map[string]interface{}{"error": "No status for this issue"})
-return
-}
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "No status for this issue"})
+		return
+	}
 
-w.WriteHeader(http.StatusOK)
-json.NewEncoder(w).Encode(status)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(status)
 }
