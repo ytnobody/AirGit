@@ -2938,8 +2938,8 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	log.Printf("Using copilot at: %s", copilotPath)
 	log.Printf("Copilot prompt: %s", prompt)
 	
-	// Add timeout context (10 minutes)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Add timeout context (180 minutes / 3 hours)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Minute)
 	defer cancel()
 	
 	ghCmd := exec.CommandContext(ctx, copilotPath, "--allow-all-tools")

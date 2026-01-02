@@ -1070,7 +1070,7 @@
                         
                         if (response.ok) {
                             // Poll for status
-                            let maxAttempts = 150; // 5 minutes (150 * 2 seconds)
+                            let maxAttempts = 5400; // 180 minutes / 3 hours (5400 * 2 seconds)
                             const pollInterval = setInterval(async () => {
                                 maxAttempts--;
                                 if (maxAttempts <= 0) {
