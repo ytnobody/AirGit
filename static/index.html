@@ -962,11 +962,9 @@
                 const repoPath = getCurrentRepositoryPath();
                 const url = new URL('/api/github/issues', window.location.origin);
                 
-                // Use provided repoPath if it's not just '/', otherwise use default
+                // Use provided repoPath if available
                 if (repoPath && repoPath !== '/') {
                     url.searchParams.append('repoPath', repoPath);
-                } else {
-                    url.searchParams.append('repoPath', '/home/ytnobody/AirGit');
                 }
                 
                 console.log('Fetching issues from:', url.toString());
