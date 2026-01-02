@@ -588,7 +588,7 @@ Response:
 
 1. **Frontend** (HTML5 + Tailwind CSS): Mobile-first UI with bottom navigation bar and intuitive controls
 2. **Backend** (Go):
-   - Exposes comprehensive HTTP REST API (25+ endpoints)
+   - Exposes comprehensive HTTP REST API (26+ endpoints)
    - Executes git commands locally
    - Manages multiple repositories in a base directory
    - Supports systemd service registration and management
@@ -787,6 +787,50 @@ GitHub Repository
 - No external webhooks required
 - Direct control from AirGit UI for better UX
 
+## GitHub Issue Creation
+
+AirGit supports creating GitHub issues directly from the web UI.
+
+### POST /api/github/issue/create
+Create a new GitHub issue in the current repository.
+
+Requirements:
+- GitHub CLI (`gh`) installed and authenticated
+- GitHub repository with configured origin remote
+- Valid GitHub CLI OAuth token
+
+Request Body:
+```json
+{
+  "title": "Feature request: Add dark mode",
+  "body": "It would be great to have a dark mode option for better visibility at night."
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "url": "https://github.com/owner/repo/issues/123",
+  "message": "Issue created successfully"
+}
+```
+
+### How to Use
+
+1. Click the **+ New** button in the Issues panel
+2. Enter the issue title (required)
+3. Enter the issue description/body (optional)
+4. Click **Create**
+5. The issue is created on GitHub and the issues list is refreshed automatically
+
+### Notes
+
+- Requires GitHub CLI authentication via `gh auth login`
+- The OAuth token must have `repo` scope permissions
+- Issue will be created in the GitHub repository linked via the origin remote
+- Both title and body support Markdown formatting
+
 
 ## Architecture
 
@@ -801,7 +845,7 @@ Local Git Repositories & Systemd User Services
 ### Components
 
 - **Frontend UI**: Bottom navigation bar with Repos, Branch, Remotes, Log, Settings buttons; central Push/Pull operation buttons
-- **REST API**: 25+ endpoints for repository, git, and systemd operations
+- **REST API**: 26+ endpoints for repository, git, GitHub, and systemd operations
 - **Git Executor**: Executes git commands locally on the filesystem
 - **Repository Manager**: Handles multiple repositories within base directory
 - **Systemd Integration**: Registers and manages AirGit as a systemd user service for background operation

@@ -228,6 +228,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/issue/create", handleCreateGitHubIssue)
 	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
 	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
@@ -2385,6 +2386,109 @@ func parseGitHubURL(remoteURL string) (owner, repo string) {
 	}
 
 	return "", ""
+}
+
+func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "POST only",
+		})
+		return
+	}
+
+	var req struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	if req.Title == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Issue title is required",
+		})
+		return
+	}
+
+	repoPath := r.URL.Query().Get("repoPath")
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	// Check if gh CLI is authenticated
+	authEnv := []string{}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GH_TOKEN=") {
+			authEnv = append(authEnv, e)
+		}
+	}
+	authCheckCmd := exec.Command("gh", "auth", "status")
+	authCheckCmd.Env = authEnv
+	if err := authCheckCmd.Run(); err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "GitHub CLI not authenticated. Please authenticate via Settings first.",
+		})
+		return
+	}
+
+	// Create issue using gh CLI
+	cmd := exec.Command("gh", "issue", "create", "--title", req.Title, "--body", req.Body)
+	cmd.Dir = config.RepoPath
+	cmd.Env = authEnv
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(errOut.String())
+		log.Printf("Failed to create issue: %v, stderr: %s", err, errMsg)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": fmt.Sprintf("Failed to create issue: %v", err),
+			"details": errMsg,
+		})
+		return
+	}
+
+	issueURL := strings.TrimSpace(out.String())
+	log.Printf("Issue created: %s", issueURL)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     issueURL,
+		"message": "Issue created successfully",
+	})
 }
 
 func executeCommand(name string, args ...string) (string, error) {
