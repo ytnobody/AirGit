@@ -2650,6 +2650,91 @@ func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
+// stripAnsiCodes removes ANSI escape sequences from a string
+func stripAnsiCodes(str string) string {
+	// Simple regex-free approach: remove ESC sequences
+	var result strings.Builder
+	inEscape := false
+	for i := 0; i < len(str); i++ {
+		if str[i] == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			// Skip until we find a letter (end of escape sequence)
+			if (str[i] >= 'A' && str[i] <= 'Z') || (str[i] >= 'a' && str[i] <= 'z') {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteByte(str[i])
+	}
+	return result.String()
+}
+
+// extractMeaningfulProgress extracts useful progress messages from Copilot CLI output
+func extractMeaningfulProgress(line string) (string, bool) {
+	line = stripAnsiCodes(line)
+	line = strings.TrimSpace(line)
+	
+	// Ignore empty lines
+	if len(line) == 0 {
+		return "", false
+	}
+	
+	// Ignore lines that are just control characters or very short
+	if len(line) < 3 {
+		return "", false
+	}
+	
+	// Look for meaningful patterns from Copilot CLI output
+	meaningfulPrefixes := []string{
+		"Analyzing",
+		"Reading",
+		"Processing",
+		"Generating",
+		"Creating",
+		"Editing",
+		"Writing",
+		"Updating",
+		"Searching",
+		"Found",
+		"Suggesting",
+		"Applying",
+		"Running",
+		"Executing",
+		"Checking",
+		"Validating",
+		"Building",
+		"Testing",
+		"✓",
+		"✗",
+		"●",
+		"○",
+		"→",
+	}
+	
+	for _, prefix := range meaningfulPrefixes {
+		if strings.HasPrefix(line, prefix) || strings.Contains(line, prefix) {
+			// Truncate if too long
+			if len(line) > 120 {
+				return line[:117] + "...", true
+			}
+			return line, true
+		}
+	}
+	
+	// If line contains question marks or ends with colon, it might be prompting
+	if strings.Contains(line, "?") || strings.HasSuffix(line, ":") {
+		if len(line) > 120 {
+			return line[:117] + "...", true
+		}
+		return line, true
+	}
+	
+	return "", false
+}
+
 func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	log.Printf("processAgentIssue: starting for #%d", issueNumber)
 	
@@ -2862,38 +2947,112 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	ghCmd.Env = env
 	ghCmd.Stdin = strings.NewReader(prompt)
 
+	// Capture output in real-time
 	var ghOut bytes.Buffer
 	var ghErr bytes.Buffer
-	ghCmd.Stdout = &ghOut
-	ghCmd.Stderr = &ghErr
+	
+	// Create pipes to read stdout/stderr in real-time
+	stdoutPipe, err := ghCmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Failed to create stdout pipe: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to setup Copilot command: %v", err),
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+	
+	stderrPipe, err := ghCmd.StderrPipe()
+	if err != nil {
+		log.Printf("Failed to create stderr pipe: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to setup Copilot command: %v", err),
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
 
-	// Update progress periodically during Copilot execution
-	progressTicker := time.NewTicker(10 * time.Second)
-	copilotDone := make(chan bool)
+	// Start the command
+	if err := ghCmd.Start(); err != nil {
+		log.Printf("Failed to start Copilot command: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to start Copilot command: %v", err),
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	// Read stdout in real-time and update progress
 	go func() {
-		elapsed := 0
+		buf := make([]byte, 1024)
 		for {
-			select {
-			case <-progressTicker.C:
-				elapsed += 10
-				updateProgress(fmt.Sprintf("Copilot is analyzing (running for %d seconds)...", elapsed))
-			case <-copilotDone:
-				progressTicker.Stop()
-				return
+			n, err := stdoutPipe.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				ghOut.Write(buf[:n])
+				log.Printf("Copilot stdout: %s", chunk)
+				
+				// Extract meaningful progress messages
+				lines := strings.Split(chunk, "\n")
+				for _, line := range lines {
+					if progressMsg, ok := extractMeaningfulProgress(line); ok {
+						updateProgress(fmt.Sprintf("🤖 %s", progressMsg))
+					}
+				}
+			}
+			if err != nil {
+				break
 			}
 		}
 	}()
 
-	err := ghCmd.Run()
-	close(copilotDone)
-	progressTicker.Stop()
+	// Read stderr in real-time (also check for meaningful progress messages)
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				ghErr.Write(buf[:n])
+				log.Printf("Copilot stderr: %s", chunk)
+				
+				// Some CLIs output progress to stderr
+				lines := strings.Split(chunk, "\n")
+				for _, line := range lines {
+					if progressMsg, ok := extractMeaningfulProgress(line); ok {
+						updateProgress(fmt.Sprintf("🤖 %s", progressMsg))
+					}
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	err = ghCmd.Wait()
 	
 	ghOutput := ghOut.String()
 	ghError := ghErr.String()
 
-	log.Printf("gh copilot output: %s", ghOutput)
+	log.Printf("gh copilot final output: %s", ghOutput)
 	if ghError != "" {
-		log.Printf("gh copilot stderr: %s", ghError)
+		log.Printf("gh copilot final stderr: %s", ghError)
 	}
 	
 	if err != nil {
