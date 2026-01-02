@@ -2454,8 +2454,9 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("handleGitHubAuthLogin: Starting GitHub device flow authentication")
 
+	// Clear GH_TOKEN environment variable to allow device flow
 	// Start gh auth login in background to get device code
-	cmd := exec.Command("bash", "-c", `echo | timeout 10 gh auth login 2>&1`)
+	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && echo | timeout 10 gh auth login 2>&1`)
 	
 	var out bytes.Buffer
 	cmd.Stdout = &out
