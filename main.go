@@ -2667,7 +2667,8 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	
 	timestamp := time.Now().UnixNano() / 1000000
 	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, timestamp)
-	worktreePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent", issueNumber))
+	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent-%d", issueNumber, timestamp))
+	worktreePath := filepath.Join(worktreeBasePath, "AirGit")
 	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
 	
 	// Get the main repository path (not worktree)
@@ -2689,6 +2690,28 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}
 	
 	log.Printf("Using repository path: %s", repoPath)
+	
+	// Clean up any existing worktree with same issue number (in case of previous failure)
+	cleanupOldWorktrees := func() {
+		entries, err := os.ReadDir("/var/tmp/vibe-kanban/worktrees")
+		if err != nil {
+			log.Printf("Failed to read worktrees dir: %v", err)
+			return
+		}
+		prefix := fmt.Sprintf("%d-issue-agent", issueNumber)
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), prefix) && entry.IsDir() {
+				oldPath := filepath.Join("/var/tmp/vibe-kanban/worktrees", entry.Name())
+				log.Printf("Cleaning up old worktree: %s", oldPath)
+				cmd := exec.Command("git", "worktree", "remove", "-f", oldPath)
+				cmd.Dir = repoPath
+				if out, err := cmd.CombinedOutput(); err != nil {
+					log.Printf("Failed to remove old worktree %s: %v, output: %s", oldPath, err, string(out))
+				}
+			}
+		}
+	}
+	cleanupOldWorktrees()
 	
 	// Ensure worktree base directory exists
 	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
@@ -2733,8 +2756,8 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	}
 	
 	// Create git worktree
-	log.Printf("Creating git worktree at %s from %s", worktreePath, defaultBranch)
-	if err := gitCmd("worktree", "add", worktreePath, "-b", branchName, defaultBranch); err != nil {
+	log.Printf("Creating git worktree at %s from %s", worktreeBasePath, defaultBranch)
+	if err := gitCmd("worktree", "add", worktreeBasePath, "-b", branchName, defaultBranch); err != nil {
 		log.Printf("worktree creation failed: %v", err)
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
@@ -2748,10 +2771,10 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		return
 	}
 	defer func() {
-		log.Printf("Removing git worktree at %s", worktreePath)
+		log.Printf("Removing git worktree at %s", worktreeBasePath)
 		// Use -f flag to force removal even if there are changes
-		cmd := exec.Command("git", "worktree", "remove", "-f", worktreePath)
-		cmd.Dir = config.RepoPath
+		cmd := exec.Command("git", "worktree", "remove", "-f", worktreeBasePath)
+		cmd.Dir = repoPath
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("worktree removal warning: %v, output: %s", err, string(out))
 		}
