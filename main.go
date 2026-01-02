@@ -2475,19 +2475,31 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 			if len(parts) >= 2 {
 				code = strings.TrimSpace(parts[len(parts)-1])
 			}
-		} else if strings.Contains(line, "https://github.com/login/device") {
-			url = strings.TrimSpace(line)
-			url = strings.TrimPrefix(url, "Open this URL to continue in your web browser: ")
+		}
+		if strings.Contains(line, "https://github.com/login/device") {
+			// Extract just the URL
+			if idx := strings.Index(line, "https://github.com/login/device"); idx >= 0 {
+				url = "https://github.com/login/device"
+			}
 		}
 	}
 	
 	if code == "" || url == "" {
-		log.Printf("Failed to parse device code from output")
+		log.Printf("Failed to parse device code from output. code='%s', url='%s'", code, url)
+		log.Printf("Raw output lines:")
+		for i, line := range lines {
+			log.Printf("  Line %d: %q", i, line)
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error":   "Failed to start device flow authentication",
 			"success": false,
 			"output":  output,
+			"debug":   map[string]interface{}{
+				"code":       code,
+				"url":        url,
+				"line_count": len(lines),
+			},
 		})
 		return
 	}
