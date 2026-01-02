@@ -2419,7 +2419,7 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
-	err := cmd.Run()
+	cmd.Run()
 	
 	output := out.String()
 	
