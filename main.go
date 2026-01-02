@@ -171,6 +171,7 @@ func main() {
 	http.HandleFunc("/api/systemd/status", handleSystemdStatus)
 	http.HandleFunc("/api/systemd/service-status", handleSystemdServiceStatus)
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
+	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
 	http.HandleFunc("/api/agent/process", handleAgentProcess)
@@ -1770,6 +1771,71 @@ func handleSystemdServiceStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Service started successfully",
+	})
+}
+
+func handleSystemdRebuildRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if service is registered
+	if !isSystemdServiceRegistered() {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Service is not registered with systemd",
+		})
+		return
+	}
+
+	// Get the directory where the binary is located
+	exePath, err := os.Executable()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to determine executable path: %v", err),
+		})
+		return
+	}
+	workDir := filepath.Dir(exePath)
+
+	// Build the binary
+	buildCmd := exec.Command("go", "build", "-o", "airgit", ".")
+	buildCmd.Dir = workDir
+
+	var buildOutput bytes.Buffer
+	buildCmd.Stderr = &buildOutput
+	buildCmd.Stdout = &buildOutput
+
+	if err := buildCmd.Run(); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Build failed: %v", err),
+			"details": buildOutput.String(),
+		})
+		return
+	}
+
+	// Build succeeded, now restart the service
+	restartCmd := exec.Command("systemctl", "--user", "restart", "airgit")
+	if err := restartCmd.Run(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to restart service: %v", err),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Build successful and service restarted successfully",
 	})
 }
 
