@@ -320,6 +320,27 @@
                         </button>
                     </div>
 
+                    <!-- GitHub OAuth Section -->
+                    <div class="border border-sky-200 rounded p-4 bg-white/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-700">GitHub Authentication</h3>
+                                <p class="text-xs text-gray-600 mt-1">Required for Agent features</p>
+                            </div>
+                            <div id="github-auth-badge" class="px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600">
+                                Checking...
+                            </div>
+                        </div>
+                        <div id="github-auth-message" class="text-xs text-gray-600 mb-3"></div>
+                        <button id="github-auth-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">
+                            <span id="github-auth-btn-text">Authenticate with GitHub</span>
+                            <svg id="github-auth-spinner" class="loading hidden inline-block w-4 h-4 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
                     <!-- PWA Install Section -->
                     <div id="pwa-section" class="border border-sky-200 rounded p-4 bg-white/50">
                         <div class="flex items-center justify-between mb-3">
@@ -1071,7 +1092,11 @@
                                             btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
                                             btn.disabled = false;
                                             if (status.message) {
-                                                showErrorNotification(`Agent failed: ${status.message}`, 10000);
+                                                let errorMsg = `Agent failed: ${status.message}`;
+                                                if (status.message.includes('OAuth') || status.message.includes('authenticate')) {
+                                                    errorMsg += ' → Go to Settings to authenticate with GitHub.';
+                                                }
+                                                showErrorNotification(errorMsg, 15000);
                                             }
                                         }
                                     }
@@ -2000,7 +2025,84 @@
         const originalSettingsOpen = settingsBtn.onclick;
         settingsBtn.addEventListener('click', () => {
             loadServiceStatus();
+            loadGitHubAuthStatus();
             initializePWAInstall();
+        });
+
+        // GitHub OAuth Features
+        const githubAuthBtn = document.getElementById('github-auth-btn');
+        const githubAuthBtnText = document.getElementById('github-auth-btn-text');
+        const githubAuthSpinner = document.getElementById('github-auth-spinner');
+        const githubAuthBadge = document.getElementById('github-auth-badge');
+        const githubAuthMessage = document.getElementById('github-auth-message');
+
+        async function loadGitHubAuthStatus() {
+            try {
+                const response = await fetch('/api/github/auth/status');
+                const data = await response.json();
+
+                if (data.authenticated) {
+                    githubAuthBadge.textContent = '✓ Authenticated';
+                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    githubAuthMessage.textContent = '✓ GitHub CLI is authenticated';
+                    githubAuthBtn.disabled = true;
+                    githubAuthBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    githubAuthBtnText.textContent = '✓ Authenticated';
+                } else {
+                    githubAuthBadge.textContent = 'Not Authenticated';
+                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700';
+                    githubAuthMessage.textContent = 'Agent features require GitHub authentication';
+                    githubAuthBtn.disabled = false;
+                    githubAuthBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    githubAuthBtnText.textContent = 'Authenticate with GitHub';
+                }
+            } catch (error) {
+                console.error('Error loading GitHub auth status:', error);
+                githubAuthBadge.textContent = 'Error';
+                githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
+                githubAuthMessage.textContent = 'Failed to check authentication status';
+            }
+        }
+
+        githubAuthBtn.addEventListener('click', async () => {
+            if (githubAuthBtn.disabled) return;
+
+            githubAuthBtn.disabled = true;
+            githubAuthBtnText.classList.add('hidden');
+            githubAuthSpinner.classList.remove('hidden');
+            githubAuthMessage.textContent = 'Opening browser for authentication...';
+
+            try {
+                const response = await fetch('/api/github/auth/login', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    githubAuthBadge.textContent = '✓ Authenticated';
+                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-sky-600';
+                    githubAuthMessage.textContent = '✓ Authentication successful!';
+                    githubAuthBtn.disabled = true;
+                    githubAuthBtn.className = 'w-full bg-sky-200 px-4 py-2 rounded text-white text-sm font-medium opacity-50 cursor-not-allowed';
+                    githubAuthBtnText.textContent = '✓ Authenticated';
+                    githubAuthSpinner.classList.add('hidden');
+                } else {
+                    githubAuthBadge.textContent = 'Failed';
+                    githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
+                    githubAuthMessage.textContent = '✗ Authentication failed: ' + (data.error || 'Unknown error');
+                    githubAuthBtn.disabled = false;
+                    githubAuthBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                    githubAuthBtnText.classList.remove('hidden');
+                    githubAuthSpinner.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error authenticating with GitHub:', error);
+                githubAuthBadge.textContent = 'Error';
+                githubAuthBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700';
+                githubAuthMessage.textContent = '✗ Network error: ' + error.message;
+                githubAuthBtn.disabled = false;
+                githubAuthBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
+                githubAuthBtnText.classList.remove('hidden');
+                githubAuthSpinner.classList.add('hidden');
+            }
         });
 
         // Rebuild & Restart Features

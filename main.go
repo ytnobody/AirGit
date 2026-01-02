@@ -225,6 +225,8 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
+	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
 	http.HandleFunc("/api/agent/process", handleAgentProcess)
 	http.HandleFunc("/api/agent/status", handleAgentStatus)
@@ -2401,6 +2403,75 @@ func executeCommand(name string, args ...string) (string, error) {
 	return result, nil
 }
 
+func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "GET only"})
+		return
+	}
+
+	// Check if gh is authenticated
+	cmd := exec.Command("gh", "auth", "status")
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+
+	err := cmd.Run()
+	
+	isAuthenticated := err == nil
+	statusOutput := out.String() + errOut.String()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"authenticated": isAuthenticated,
+		"status":        statusOutput,
+	})
+}
+
+func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "POST only"})
+		return
+	}
+
+	log.Printf("handleGitHubAuthLogin: Starting GitHub OAuth login")
+
+	// Run gh auth login with web flow
+	cmd := exec.Command("gh", "auth", "login", "--web", "-h", "github.com")
+	
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+	
+	err := cmd.Run()
+	
+	output := out.String() + errOut.String()
+	log.Printf("gh auth login output: %s", output)
+	
+	if err != nil {
+		log.Printf("gh auth login error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   fmt.Sprintf("Authentication failed: %v", err),
+			"output":  output,
+			"success": false,
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "GitHub authentication completed",
+		"output":  output,
+	})
+}
+
 func handleAgentTrigger(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -2521,6 +2592,22 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 			log.Printf("worktree removal warning: %v, output: %s", err, string(out))
 		}
 	}()
+
+	// Check if GitHub CLI is authenticated before proceeding
+	authCheckCmd := exec.Command("gh", "auth", "status")
+	if err := authCheckCmd.Run(); err != nil {
+		log.Printf("GitHub authentication check failed: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     "No valid GitHub CLI OAuth token detected. Please authenticate via Settings.",
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
 
 	// Create prompt for Copilot CLI
 	prompt := fmt.Sprintf(`Issue #%d: %s
