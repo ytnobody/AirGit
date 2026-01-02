@@ -74,6 +74,8 @@ var config Config
 var baseRepoPath string
 var agentStatus map[int]AgentStatus // issueNumber -> status
 var agentStatusMutex sync.Mutex
+var githubAuthProcess *exec.Cmd // Track ongoing GitHub auth process
+var githubAuthMutex sync.Mutex
 
 func init() {
 	// Determine default RepoPath
@@ -2454,22 +2456,87 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("handleGitHubAuthLogin: Starting GitHub device flow authentication")
 
-	// Clear GH_TOKEN environment variable to allow device flow
-	// Start gh auth login in background to get device code
-	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && echo | timeout 10 gh auth login 2>&1`)
+	githubAuthMutex.Lock()
+	defer githubAuthMutex.Unlock()
+
+	// Kill any existing auth process
+	if githubAuthProcess != nil {
+		log.Printf("Killing existing auth process")
+		githubAuthProcess.Process.Kill()
+		githubAuthProcess = nil
+	}
+
+	// Start gh auth login and capture initial output for device code
+	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth login 2>&1`)
 	
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Failed to create stdout pipe: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Failed to start authentication",
+			"success": false,
+		})
+		return
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Printf("Failed to create stderr pipe: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Failed to start authentication",
+			"success": false,
+		})
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("Failed to start gh auth login: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Failed to start authentication",
+			"success": false,
+		})
+		return
+	}
+
+	// Read initial output to get device code
+	var output bytes.Buffer
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				output.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				output.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// Wait for device code to appear (max 5 seconds)
+	time.Sleep(3 * time.Second)
 	
-	cmd.Run()
-	output := out.String()
-	
-	log.Printf("gh auth login output: %s", output)
+	outputStr := output.String()
+	log.Printf("gh auth login initial output: %s", outputStr)
 	
 	// Parse the one-time code and URL from output
 	var code, url string
-	lines := strings.Split(output, "\n")
+	lines := strings.Split(outputStr, "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "one-time code:") {
 			parts := strings.Split(line, ":")
@@ -2478,7 +2545,6 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if strings.Contains(line, "https://github.com/login/device") {
-			// Extract just the URL
 			if idx := strings.Index(line, "https://github.com/login/device"); idx >= 0 {
 				url = "https://github.com/login/device"
 			}
@@ -2487,23 +2553,29 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 	
 	if code == "" || url == "" {
 		log.Printf("Failed to parse device code from output. code='%s', url='%s'", code, url)
-		log.Printf("Raw output lines:")
-		for i, line := range lines {
-			log.Printf("  Line %d: %q", i, line)
-		}
+		cmd.Process.Kill()
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"error":   "Failed to start device flow authentication",
 			"success": false,
-			"output":  output,
-			"debug":   map[string]interface{}{
-				"code":       code,
-				"url":        url,
-				"line_count": len(lines),
-			},
+			"output":  outputStr,
 		})
 		return
 	}
+	
+	// Store the process so it continues running in background
+	githubAuthProcess = cmd
+	
+	// Start goroutine to wait for completion
+	go func() {
+		cmd.Wait()
+		githubAuthMutex.Lock()
+		if githubAuthProcess == cmd {
+			githubAuthProcess = nil
+		}
+		githubAuthMutex.Unlock()
+		log.Printf("GitHub auth process completed")
+	}()
 	
 	log.Printf("Device flow started: code=%s, url=%s", code, url)
 	
