@@ -20,7 +20,7 @@ A lightweight web-based GUI for managing Git repositories directly from your bro
 - 🔧 Systemd service registration and management
 - ⚙️ Settings menu for configuration
 - 🚀 Standalone Go binary
-- 🤖 **GitHub Issues integration** - Browse and display GitHub issues directly in UI
+- 🤖 **GitHub Issues integration** - Browse and create GitHub issues directly in UI
 - 🧠 **AI Agent for issue resolution** - One-click automated issue fixing with PR generation
 
 ## Quick Start

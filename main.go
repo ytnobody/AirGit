@@ -228,6 +228,7 @@ func main() {
 	http.HandleFunc("/api/systemd/service-start", handleSystemdServiceStart)
 	http.HandleFunc("/api/systemd/rebuild-restart", handleSystemdRebuildRestart)
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
+	http.HandleFunc("/api/github/issues/create", handleCreateGitHubIssue)
 	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
 	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
@@ -2355,6 +2356,130 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 		"repo":      repo,
 		"remoteUrl": remoteURL,
 		"issues":    issues,
+	})
+}
+
+func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "POST only",
+		})
+		return
+	}
+
+	repoPath := r.URL.Query().Get("repoPath")
+	
+	// Use provided repoPath or fall back to config.RepoPath
+	originalRepoPath := config.RepoPath
+	if repoPath != "" {
+		// Resolve and validate the path
+		var resolvedPath string
+		var err error
+		if filepath.IsAbs(repoPath) {
+			resolvedPath = repoPath
+		} else {
+			resolvedPath = filepath.Join(originalRepoPath, repoPath)
+		}
+		resolvedPath, err = filepath.Abs(resolvedPath)
+		if err == nil {
+			basePath, _ := filepath.Abs(originalRepoPath)
+			if strings.HasPrefix(resolvedPath, basePath+string(filepath.Separator)) || resolvedPath == basePath {
+				config.RepoPath = resolvedPath
+			}
+		}
+	}
+
+	defer func() {
+		config.RepoPath = originalRepoPath
+	}()
+
+	var req struct {
+		Title string   `json:"title"`
+		Body  string   `json:"body"`
+		Labels []string `json:"labels"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Invalid request body",
+		})
+		return
+	}
+
+	if req.Title == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Title is required",
+		})
+		return
+	}
+
+	// Get GitHub remote URL
+	output, err := executeCommand("git", "config", "--get", "remote.origin.url")
+	if err != nil || strings.TrimSpace(output) == "" {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "No GitHub remote found. Make sure 'origin' remote is configured.",
+		})
+		return
+	}
+
+	remoteURL := strings.TrimSpace(output)
+
+	// Parse GitHub URL to extract owner/repo
+	owner, repo := parseGitHubURL(remoteURL)
+	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "Could not parse GitHub repository from remote URL: " + remoteURL,
+		})
+		return
+	}
+
+	// Build gh CLI command
+	args := []string{"issue", "create", "--title", req.Title}
+	if req.Body != "" {
+		args = append(args, "--body", req.Body)
+	}
+	for _, label := range req.Labels {
+		args = append(args, "--label", label)
+	}
+
+	// Create issue using gh CLI
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = config.RepoPath
+	
+	var issueOutput bytes.Buffer
+	var issueError bytes.Buffer
+	cmd.Stdout = &issueOutput
+	cmd.Stderr = &issueError
+	
+	log.Printf("gh command: create issue, owner=%s, repo=%s, title=%s", owner, repo, req.Title)
+	
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(issueError.String())
+		log.Printf("gh issue create error: %v, stderr: %s", err, errMsg)
+		
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   errMsg,
+			"message": fmt.Sprintf("Failed to create issue: %v", err),
+		})
+		return
+	}
+
+	issueURL := strings.TrimSpace(issueOutput.String())
+	log.Printf("Issue created: %s", issueURL)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     issueURL,
+		"owner":   owner,
+		"repo":    repo,
 	})
 }
 
