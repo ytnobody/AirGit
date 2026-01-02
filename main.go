@@ -2452,36 +2452,23 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("handleGitHubAuthLogin: Starting GitHub OAuth login")
+	log.Printf("handleGitHubAuthLogin: Providing authentication instructions")
 
-	// Run gh auth login with web flow
-	cmd := exec.Command("gh", "auth", "login", "--web", "-h", "github.com")
-	
-	var out bytes.Buffer
-	var errOut bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errOut
-	
-	err := cmd.Run()
-	
-	output := out.String() + errOut.String()
-	log.Printf("gh auth login output: %s", output)
-	
-	if err != nil {
-		log.Printf("gh auth login error: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":   fmt.Sprintf("Authentication failed: %v", err),
-			"output":  output,
-			"success": false,
-		})
-		return
-	}
+	// Instead of running the command directly, provide instructions to the user
+	instructions := `To authenticate GitHub CLI for Copilot features:
+
+1. Open a terminal on the server
+2. Run: gh auth login --web -h github.com
+3. Follow the browser authentication flow
+4. Refresh this page to verify authentication
+
+Alternatively, you can run this command directly on the AirGit server.`
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "GitHub authentication completed",
-		"output":  output,
+		"success":      false,
+		"instructions": true,
+		"message":      "Manual authentication required",
+		"details":      instructions,
 	})
 }
 
