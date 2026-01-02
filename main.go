@@ -2417,10 +2417,10 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	// Check if gh copilot is actually usable (requires OAuth, not just GH_TOKEN)
 	// Test with new copilot CLI
 	// IMPORTANT: unset GH_TOKEN to avoid it being used instead of OAuth token
-	copilotPath := "/usr/local/bin/copilot"
+	homeDir, _ := os.UserHomeDir()
+	copilotPath := filepath.Join(homeDir, "bin", "copilot")
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
-		homeDir, _ := os.UserHomeDir()
-		copilotPath = filepath.Join(homeDir, "bin", "copilot")
+		copilotPath = "/usr/local/bin/copilot"
 	}
 	
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(`unset GH_TOKEN && echo "test" | timeout 5 %s --allow-all-tools 2>&1`, copilotPath))
@@ -2779,12 +2779,15 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 	}
 	
 	// Use copilot binary directly with non-interactive mode
-	copilotPath := "/usr/local/bin/copilot"
+	homeDir, _ := os.UserHomeDir()
+	copilotPath := filepath.Join(homeDir, "bin", "copilot")
+	
+	// If not in home bin, try /usr/local/bin
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
-		// Try user's home bin
-		homeDir, _ := os.UserHomeDir()
-		copilotPath = filepath.Join(homeDir, "bin", "copilot")
+		copilotPath = "/usr/local/bin/copilot"
 	}
+	
+	log.Printf("Using copilot at: %s", copilotPath)
 	
 	ghCmd := exec.Command(copilotPath, "--allow-all-tools")
 	ghCmd.Dir = worktreePath
