@@ -1822,21 +1822,32 @@ func handleSystemdRebuildRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build succeeded, now restart the service
-	restartCmd := exec.Command("systemctl", "--user", "restart", "airgit")
-	if err := restartCmd.Run(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("Failed to restart service: %v", err),
-		})
-		return
-	}
-
+	// Send success response before restart
+	// This ensures the client receives the response before the service terminates
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": "Build successful and service restarted successfully",
+		"message": "Build successful, restarting service...",
 	})
+
+	// Flush the response to ensure it's sent
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	// Schedule restart after a short delay to allow response to be sent
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		restartCmd := exec.Command("systemctl", "--user", "restart", "airgit")
+		var restartOutput bytes.Buffer
+		restartCmd.Stderr = &restartOutput
+		restartCmd.Stdout = &restartOutput
+		if err := restartCmd.Run(); err != nil {
+			log.Printf("Failed to restart service: %v, output: %s", err, restartOutput.String())
+		} else {
+			log.Printf("Service restart initiated successfully")
+		}
+	}()
 }
 
 func handleListCommits(w http.ResponseWriter, r *http.Request) {
