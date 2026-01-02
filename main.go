@@ -2692,6 +2692,19 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	
 	log.Printf("Using repository path: %s", repoPath)
 	
+	// Helper function to update status message
+	updateProgress := func(message string) {
+		agentStatusMutex.Lock()
+		if status, ok := agentStatus[issueNumber]; ok {
+			status.Message = message
+			agentStatus[issueNumber] = status
+		}
+		agentStatusMutex.Unlock()
+		log.Printf("Agent progress #%d: %s", issueNumber, message)
+	}
+	
+	updateProgress("Cleaning up old worktrees...")
+	
 	// Clean up any existing worktree with same issue number (in case of previous failure)
 	cleanupOldWorktrees := func() {
 		entries, err := os.ReadDir("/var/tmp/vibe-kanban/worktrees")
@@ -2742,11 +2755,13 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		return err
 	}
 
+	updateProgress("Fetching latest changes from origin...")
 	// Fetch latest changes
 	if err := gitCmd("fetch", "origin"); err != nil {
 		log.Printf("fetch failed (continuing anyway): %v", err)
 	}
 	
+	updateProgress("Determining default branch...")
 	// Get default branch name
 	defaultBranch := "main"
 	if output, err := executeGitCommand("symbolic-ref", "refs/remotes/origin/HEAD"); err == nil {
@@ -2756,6 +2771,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		}
 	}
 	
+	updateProgress(fmt.Sprintf("Creating worktree for branch %s...", branchName))
 	// Create git worktree
 	log.Printf("Creating git worktree at %s from %s", worktreePath, defaultBranch)
 	if err := gitCmd("worktree", "add", worktreePath, "-b", branchName, defaultBranch); err != nil {
@@ -2781,6 +2797,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 		}
 	}()
 
+	updateProgress("Checking GitHub authentication...")
 	// Check if GitHub CLI is authenticated before proceeding
 	// Filter out GH_TOKEN to check OAuth token
 	authEnv := []string{}
@@ -2812,6 +2829,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 
 Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 
+	updateProgress("Analyzing issue and generating implementation with AI...")
 	log.Printf("Invoking copilot CLI for issue #%d", issueNumber)
 	
 	// Use new copilot CLI (not gh extension)
@@ -2885,6 +2903,7 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		return
 	}
 
+	updateProgress("Writing implementation to file...")
 	// Create a simple implementation file as a placeholder
 	// In a real implementation, you would parse the copilot output and apply changes
 	implementationFile := filepath.Join(worktreePath, fmt.Sprintf("ISSUE_%d_IMPLEMENTATION.md", issueNumber))
@@ -2917,6 +2936,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 		return
 	}
 
+	updateProgress("Committing changes to branch...")
 	// Commit changes
 	log.Printf("Committing changes in worktree")
 	wtGitCmd := func(args ...string) error {
@@ -2951,6 +2971,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 		return
 	}
 
+	updateProgress("Pushing branch to origin...")
 	// Push branch
 	if err := wtGitCmd("push", "-u", "origin", branchName); err != nil {
 		log.Printf("git push failed: %v", err)
@@ -2966,6 +2987,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 		return
 	}
 
+	updateProgress("Creating pull request...")
 	// Create PR using gh CLI
 	log.Printf("Creating PR for issue #%d", issueNumber)
 	prTitle := fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle)
