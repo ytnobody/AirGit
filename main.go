@@ -2416,7 +2416,8 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Check if gh copilot is actually usable (requires OAuth, not just GH_TOKEN)
 	// We test with a simple copilot command
-	cmd := exec.Command("bash", "-c", `echo "No" | timeout 3 gh copilot suggest -t shell "test" 2>&1`)
+	// IMPORTANT: unset GH_TOKEN to avoid it being used instead of OAuth token
+	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && echo "No" | timeout 3 gh copilot suggest -t shell "test" 2>&1`)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -2435,14 +2436,13 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	isAuthenticated := !hasOAuthError && !hasScopeError
 	
 	// Also check gh auth status for additional info
-	authCmd := exec.Command("gh", "auth", "status")
+	authCmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth status 2>&1`)
 	var authOut bytes.Buffer
-	var authErrOut bytes.Buffer
 	authCmd.Stdout = &authOut
-	authCmd.Stderr = &authErrOut
+	authCmd.Stderr = &authOut
 	authCmd.Run()
 	
-	statusOutput := authOut.String() + authErrOut.String()
+	statusOutput := authOut.String()
 	
 	// If gh auth status succeeds but copilot fails with internal error, check token scopes
 	if strings.Contains(statusOutput, "Logged in") && hasInternalError {
