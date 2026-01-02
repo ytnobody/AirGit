@@ -2415,9 +2415,15 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if gh copilot is actually usable (requires OAuth, not just GH_TOKEN)
-	// We test with a simple copilot command
+	// Test with new copilot CLI
 	// IMPORTANT: unset GH_TOKEN to avoid it being used instead of OAuth token
-	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && echo "No" | timeout 3 gh copilot suggest -t shell "test" 2>&1`)
+	copilotPath := "/usr/local/bin/copilot"
+	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
+		homeDir, _ := os.UserHomeDir()
+		copilotPath = filepath.Join(homeDir, "bin", "copilot")
+	}
+	
+	cmd := exec.Command("bash", "-c", fmt.Sprintf(`unset GH_TOKEN && echo "test" | timeout 5 %s --allow-all-tools 2>&1`, copilotPath))
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -2427,13 +2433,19 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	output := out.String()
 	
 	// Check for various error conditions
-	hasOAuthError := strings.Contains(output, "OAuth token") || strings.Contains(output, "gh auth login")
+	hasOAuthError := strings.Contains(output, "OAuth") || strings.Contains(output, "gh auth login") || strings.Contains(output, "not authenticated")
 	hasInternalError := strings.Contains(output, "internal server error")
 	hasScopeError := strings.Contains(output, "403") || strings.Contains(output, "forbidden")
+	hasNotFoundError := strings.Contains(output, "command not found") || strings.Contains(output, "No such file")
 	
-	// If there's an OAuth error or we're not logged in, definitely not authenticated
-	// But internal server error or scope error might mean we ARE authenticated, just missing copilot scope
-	isAuthenticated := !hasOAuthError && !hasScopeError
+	// If copilot CLI not found, definitely not authenticated
+	if hasNotFoundError {
+		isAuthenticated = false
+	} else {
+		// If there's an OAuth error, not authenticated
+		// But internal server error might mean authenticated with wrong subscription
+		isAuthenticated = !hasOAuthError && !hasScopeError
+	}
 	
 	// Also check gh auth status for additional info
 	authCmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth status 2>&1`)
@@ -2753,9 +2765,9 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 
 Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 
-	log.Printf("Invoking gh copilot for issue #%d", issueNumber)
+	log.Printf("Invoking copilot CLI for issue #%d", issueNumber)
 	
-	// Use gh copilot suggest to get implementation suggestions
+	// Use new copilot CLI (not gh extension)
 	// IMPORTANT: Filter out GH_TOKEN from environment to use OAuth token
 	env := []string{}
 	for _, e := range os.Environ() {
@@ -2764,9 +2776,18 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		}
 	}
 	
-	ghCmd := exec.Command("gh", "copilot", "suggest", "-t", "shell", prompt)
+	// Use copilot binary directly with non-interactive mode
+	copilotPath := "/usr/local/bin/copilot"
+	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
+		// Try user's home bin
+		homeDir, _ := os.UserHomeDir()
+		copilotPath = filepath.Join(homeDir, "bin", "copilot")
+	}
+	
+	ghCmd := exec.Command(copilotPath, "--allow-all-tools")
 	ghCmd.Dir = worktreePath
 	ghCmd.Env = env
+	ghCmd.Stdin = strings.NewReader(prompt)
 
 	var ghOut bytes.Buffer
 	var ghErr bytes.Buffer
@@ -2787,6 +2808,15 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		errorMsg := fmt.Sprintf("Copilot command failed: %v", err)
 		if ghError != "" {
 			errorMsg = fmt.Sprintf("Copilot error: %s", ghError)
+			// Check for subscription or access issues
+			if strings.Contains(ghError, "code: 400") || strings.Contains(ghError, "internal server error") {
+				errorMsg = "GitHub Copilot CLI returned error 400.\n\n" +
+					"This may be caused by:\n" +
+					"1. CLI version compatibility issue (gh-copilot v1.1.1 may have API limitations)\n" +
+					"2. Copilot Pro+ features not fully supported in CLI\n" +
+					"3. Rate limiting or temporary API issues\n\n" +
+					"The Agent feature is currently not available. Please check GitHub status or try again later."
+			}
 		}
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
