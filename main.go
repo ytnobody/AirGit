@@ -2425,9 +2425,14 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	
 	output := out.String()
 	
-	// If the output contains "OAuth token" error, it means not properly authenticated for copilot
+	// Check for various error conditions
 	hasOAuthError := strings.Contains(output, "OAuth token") || strings.Contains(output, "gh auth login")
-	isAuthenticated := !hasOAuthError
+	hasInternalError := strings.Contains(output, "internal server error")
+	hasScopeError := strings.Contains(output, "403") || strings.Contains(output, "forbidden")
+	
+	// If there's an OAuth error or we're not logged in, definitely not authenticated
+	// But internal server error or scope error might mean we ARE authenticated, just missing copilot scope
+	isAuthenticated := !hasOAuthError && !hasScopeError
 	
 	// Also check gh auth status for additional info
 	authCmd := exec.Command("gh", "auth", "status")
@@ -2438,10 +2443,18 @@ func handleGitHubAuthStatus(w http.ResponseWriter, r *http.Request) {
 	authCmd.Run()
 	
 	statusOutput := authOut.String() + authErrOut.String()
+	
+	// If gh auth status succeeds but copilot fails with internal error, check token scopes
+	if strings.Contains(statusOutput, "Logged in") && hasInternalError {
+		// Check if copilot scope is present
+		hasCopilotScope := strings.Contains(statusOutput, "copilot")
+		isAuthenticated = hasCopilotScope
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"authenticated": isAuthenticated,
 		"status":        statusOutput,
+		"copilot_output": output,
 	})
 }
 
@@ -2467,7 +2480,7 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start gh auth login and capture initial output for device code
-	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth login 2>&1`)
+	cmd := exec.Command("bash", "-c", `unset GH_TOKEN && gh auth login -s copilot 2>&1`)
 	
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
