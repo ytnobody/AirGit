@@ -2669,6 +2669,26 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	worktreePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent", issueNumber))
 	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
 	
+	// Get the main repository path (not worktree)
+	repoPath := config.RepoPath
+	
+	// Check if current path is a worktree and get the main repo
+	gitDirFile := filepath.Join(repoPath, ".git")
+	if data, err := os.ReadFile(gitDirFile); err == nil {
+		// This is a worktree, extract main repo path
+		gitdir := strings.TrimSpace(string(data))
+		if strings.HasPrefix(gitdir, "gitdir: ") {
+			gitdir = strings.TrimPrefix(gitdir, "gitdir: ")
+			// gitdir points to .git/worktrees/XXX
+			// Main repo is at the parent of .git
+			mainGitDir := filepath.Dir(filepath.Dir(gitdir))
+			repoPath = filepath.Dir(mainGitDir)
+			log.Printf("Detected worktree, using main repo: %s", repoPath)
+		}
+	}
+	
+	log.Printf("Using repository path: %s", repoPath)
+	
 	// Ensure worktree base directory exists
 	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
 		log.Printf("Failed to create worktree base directory: %v", err)
@@ -2687,7 +2707,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	gitCmd := func(args ...string) error {
 		log.Printf("git: %v", args)
 		cmd := exec.Command("git", args...)
-		cmd.Dir = config.RepoPath
+		cmd.Dir = repoPath
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			log.Printf("git error: %v, output: %s", err, string(out))
