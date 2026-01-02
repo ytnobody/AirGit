@@ -2667,7 +2667,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 	
 	timestamp := time.Now().UnixNano() / 1000000
 	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, timestamp)
-	worktreePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent", issueNumber))
+	worktreePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent-%d", issueNumber, timestamp))
 	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
 	
 	// Get the main repository path (not worktree)
