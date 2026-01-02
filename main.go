@@ -2461,7 +2461,7 @@ func handleGitHubAuthLogin(w http.ResponseWriter, r *http.Request) {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	
-	err := cmd.Run()
+	cmd.Run()
 	output := out.String()
 	
 	log.Printf("gh auth login output: %s", output)
