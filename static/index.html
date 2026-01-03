@@ -97,6 +97,7 @@
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-sm font-bold text-sky-600">📋 Issues</h3>
                         <div class="flex gap-2">
+                            <button id="create-issue-btn" class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Create new issue">+ New</button>
                             <button id="view-toggle-btn" class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Toggle view">View: Issues</button>
                             <button id="issues-refresh-btn" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Refresh">🔄</button>
                         </div>
@@ -385,7 +386,33 @@
             </div>
         </div>
 
-        <!-- GitHub Issues Modal -->
+        <!-- Create Issue Modal -->
+        <div id="create-issue-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-4">Create New Issue</h2>
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Title</label>
+                        <input id="create-issue-title" type="text" placeholder="Issue title" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Description</label>
+                        <textarea id="create-issue-body" placeholder="Issue description" rows="6" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Labels (optional)</label>
+                        <input id="create-issue-labels" type="text" placeholder="bug, enhancement, help wanted" class="w-full bg-sky-100 border border-sky-200 rounded px-3 py-2 text-gray-800 placeholder-gray-500 text-sm focus:outline-none focus:border-sky-400">
+                        <div class="text-xs text-gray-500 mt-1">Comma-separated list</div>
+                    </div>
+                </div>
+                <div id="create-issue-error" class="hidden mb-4 p-3 bg-red-100 border border-red-300 rounded text-red-700 text-sm"></div>
+                <div class="flex gap-2">
+                    <button id="create-issue-submit" class="flex-1 bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">Create</button>
+                    <button id="create-issue-close-btn" class="flex-1 bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Create Tag Modal -->
         <div id="create-tag-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm border border-sky-200">
@@ -539,6 +566,14 @@
         const createTagSubmitBtn = document.getElementById('create-tag-submit');
         const createTagCloseBtn = document.getElementById('create-tag-close-btn');
         const createTagError = document.getElementById('create-tag-error');
+        const createIssueBtn = document.getElementById('create-issue-btn');
+        const createIssueModal = document.getElementById('create-issue-modal');
+        const createIssueTitleInput = document.getElementById('create-issue-title');
+        const createIssueBodyInput = document.getElementById('create-issue-body');
+        const createIssueLabelsInput = document.getElementById('create-issue-labels');
+        const createIssueSubmitBtn = document.getElementById('create-issue-submit');
+        const createIssueCloseBtn = document.getElementById('create-issue-close-btn');
+        const createIssueError = document.getElementById('create-issue-error');
         const pushTagModal = document.getElementById('push-tag-modal');
         const pushTagInfo = document.getElementById('push-tag-info');
         const pushTagRemote = document.getElementById('push-tag-remote');
@@ -971,6 +1006,28 @@
         });
 
         createTagSubmitBtn.addEventListener('click', createTag);
+
+        // Create Issue event listeners
+        createIssueBtn.addEventListener('click', () => {
+            createIssueModal.classList.remove('hidden');
+            createIssueError.classList.add('hidden');
+            createIssueTitleInput.value = '';
+            createIssueBodyInput.value = '';
+            createIssueLabelsInput.value = '';
+            createIssueTitleInput.focus();
+        });
+
+        createIssueCloseBtn.addEventListener('click', () => {
+            createIssueModal.classList.add('hidden');
+        });
+
+        createIssueModal.addEventListener('click', (e) => {
+            if (e.target === createIssueModal) {
+                createIssueModal.classList.add('hidden');
+            }
+        });
+
+        createIssueSubmitBtn.addEventListener('click', createIssue);
 
         pushTagCloseBtn.addEventListener('click', () => {
             pushTagModal.classList.add('hidden');
@@ -1556,6 +1613,66 @@
         function showCreateRepoError(message) {
             createRepoError.textContent = message;
             createRepoError.classList.remove('hidden');
+        }
+
+        async function createIssue() {
+            const title = createIssueTitleInput.value.trim();
+            const body = createIssueBodyInput.value.trim();
+            const labelsStr = createIssueLabelsInput.value.trim();
+            
+            if (!title) {
+                createIssueError.textContent = 'Title is required';
+                createIssueError.classList.remove('hidden');
+                return;
+            }
+
+            createIssueSubmitBtn.disabled = true;
+            createIssueSubmitBtn.textContent = 'Creating...';
+            createIssueError.classList.add('hidden');
+
+            try {
+                const repoPath = getCurrentRepositoryPath();
+                const url = new URL('/api/github/issues/create', window.location.origin);
+                if (repoPath && repoPath !== '/') {
+                    url.searchParams.append('repoPath', repoPath);
+                }
+
+                const labels = labelsStr ? labelsStr.split(',').map(l => l.trim()).filter(l => l) : [];
+
+                const response = await fetch(url.toString(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        body: body,
+                        labels: labels
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    createIssueModal.classList.add('hidden');
+                    createIssueSubmitBtn.disabled = false;
+                    createIssueSubmitBtn.textContent = 'Create';
+                    
+                    // Reload issues list
+                    loadGitHubIssues();
+                    
+                    // Show success notification
+                    showNotification(`Issue #${data.number} created successfully!`);
+                } else {
+                    createIssueError.textContent = data.error || 'Failed to create issue';
+                    createIssueError.classList.remove('hidden');
+                    createIssueSubmitBtn.disabled = false;
+                    createIssueSubmitBtn.textContent = 'Create';
+                }
+            } catch (error) {
+                createIssueError.textContent = 'Network error: ' + error.message;
+                createIssueError.classList.remove('hidden');
+                createIssueSubmitBtn.disabled = false;
+                createIssueSubmitBtn.textContent = 'Create';
+            }
         }
 
         async function loadCommits() {
