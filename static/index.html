@@ -467,6 +467,7 @@
                 <div id="pr-reviews-content" class="flex-1 overflow-y-auto space-y-3 mb-4">
                     <div class="text-center text-gray-600 text-sm">Loading reviews...</div>
                 </div>
+                <div id="pr-review-progress" class="text-xs text-sky-600 mb-2 hidden italic animate-pulse"></div>
                 <div class="space-y-2">
                     <button id="pr-apply-review-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🤖 Apply Review Comments with Agent</button>
                     <button id="pr-reviews-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
@@ -1482,7 +1483,7 @@
                             const status = await statusResponse.json();
                             
                             if (statusResponse.ok && status) {
-                                const progressEl = document.querySelector(`.agent-progress-${issueNumber}`);
+                                const progressEl = document.getElementById('pr-review-progress');
                                 if (progressEl) {
                                     progressEl.textContent = status.message;
                                     progressEl.classList.remove('hidden');
