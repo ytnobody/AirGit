@@ -67,6 +67,8 @@ type AgentStatus struct {
 	IssueNumber int       `json:"issueNumber"`
 	Status      string    `json:"status"` // "pending", "running", "completed", "failed"
 	Message     string    `json:"message"`
+	PRNumber    int       `json:"prNumber,omitempty"`
+	PRURL       string    `json:"prUrl,omitempty"`
 	StartTime   time.Time `json:"startTime"`
 	EndTime     time.Time `json:"endTime,omitempty"`
 }
@@ -230,9 +232,12 @@ func main() {
 	http.HandleFunc("/api/github/issues", handleListGitHubIssues)
 	http.HandleFunc("/api/github/auth/status", handleGitHubAuthStatus)
 	http.HandleFunc("/api/github/auth/login", handleGitHubAuthLogin)
+	http.HandleFunc("/api/github/prs", handleListGitHubPRs)
+	http.HandleFunc("/api/github/pr/reviews", handleGetPRReviews)
 	http.HandleFunc("/api/agent/trigger", handleAgentTrigger)
 	http.HandleFunc("/api/agent/process", handleAgentProcess)
 	http.HandleFunc("/api/agent/status", handleAgentStatus)
+	http.HandleFunc("/api/agent/apply-review", handleAgentApplyReview)
 	http.HandleFunc("/", serveRoot)
 
 	addr := net.JoinHostPort(config.ListenAddr, config.ListenPort)
@@ -3219,11 +3224,19 @@ Implementation in progress - This is a placeholder that should be replaced with 
 	prURL := strings.TrimSpace(prOut.String())
 	log.Printf("PR created: %s", prURL)
 	
+	// Extract PR number from URL
+	prNumber := 0
+	if parts := strings.Split(prURL, "/pull/"); len(parts) == 2 {
+		fmt.Sscanf(parts[1], "%d", &prNumber)
+	}
+	
 	agentStatusMutex.Lock()
 	agentStatus[issueNumber] = AgentStatus{
 		IssueNumber: issueNumber,
 		Status:      "completed",
 		Message:     fmt.Sprintf("PR created: %s", prURL),
+		PRNumber:    prNumber,
+		PRURL:       prURL,
 		StartTime:   startTime,
 		EndTime:     time.Now(),
 	}
@@ -3309,3 +3322,347 @@ return
 w.WriteHeader(http.StatusOK)
 json.NewEncoder(w).Encode(status)
 }
+
+func handleListGitHubPRs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	remoteURL, err := exec.Command("git", "-C", config.RepoPath, "config", "--get", "remote.origin.url").Output()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Could not detect repository"})
+		return
+	}
+
+	owner, repo := parseGitHubURL(strings.TrimSpace(string(remoteURL)))
+	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not a GitHub repository"})
+		return
+	}
+
+	cmd := exec.Command("gh", "pr", "list", "--json", "number,title,state,author,createdAt,updatedAt,url,headRefName,body", "--repo", fmt.Sprintf("%s/%s", owner, repo))
+	cmd.Dir = config.RepoPath
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("gh pr list error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "Failed to list PRs", "owner": owner, "repo": repo})
+		return
+	}
+
+	var prs []map[string]interface{}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		log.Printf("parse prs error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse PRs"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"prs":   prs,
+		"owner": owner,
+		"repo":  repo,
+	})
+}
+
+func handleGetPRReviews(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	prNumberStr := r.URL.Query().Get("pr_number")
+	if prNumberStr == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Missing pr_number"})
+		return
+	}
+
+	remoteURL, err := exec.Command("git", "-C", config.RepoPath, "config", "--get", "remote.origin.url").Output()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Could not detect repository"})
+		return
+	}
+
+	owner, repo := parseGitHubURL(strings.TrimSpace(string(remoteURL)))
+	if owner == "" || repo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Not a GitHub repository"})
+		return
+	}
+
+	cmd := exec.Command("gh", "pr", "view", prNumberStr, "--json", "reviews,comments", "--repo", fmt.Sprintf("%s/%s", owner, repo))
+	cmd.Dir = config.RepoPath
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("gh pr view error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get PR reviews"})
+		return
+	}
+
+	var prData map[string]interface{}
+	if err := json.Unmarshal(output, &prData); err != nil {
+		log.Printf("parse pr data error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse PR data"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(prData)
+}
+
+func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
+		return
+	}
+
+	var payload struct {
+		IssueNumber int    `json:"issue_number"`
+		PRNumber    int    `json:"pr_number"`
+		ReviewText  string `json:"review_text"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request"})
+		return
+	}
+
+	log.Printf("Agent apply review: Issue #%d, PR #%d", payload.IssueNumber, payload.PRNumber)
+
+	agentStatusMutex.Lock()
+	agentStatus[payload.IssueNumber] = AgentStatus{
+		IssueNumber: payload.IssueNumber,
+		Status:      "pending",
+		Message:     "Processing review comments",
+		PRNumber:    payload.PRNumber,
+		StartTime:   time.Now(),
+	}
+	agentStatusMutex.Unlock()
+
+	go processReviewComments(payload.IssueNumber, payload.PRNumber, payload.ReviewText)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Review processing started"})
+}
+
+func processReviewComments(issueNumber, prNumber int, reviewText string) {
+	startTime := time.Now()
+	
+	updateProgress := func(message string) {
+		agentStatusMutex.Lock()
+		if status, ok := agentStatus[issueNumber]; ok {
+			status.Message = message
+			agentStatus[issueNumber] = status
+		}
+		agentStatusMutex.Unlock()
+		log.Printf("Review processing #%d: %s", issueNumber, message)
+	}
+
+	updateProgress("Getting PR information...")
+
+	remoteURL, err := exec.Command("git", "-C", config.RepoPath, "config", "--get", "remote.origin.url").Output()
+	if err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to get repository info: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	owner, repo := parseGitHubURL(strings.TrimSpace(string(remoteURL)))
+	
+	cmd := exec.Command("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "headRefName,baseRefName")
+	cmd.Dir = config.RepoPath
+	output, err := cmd.Output()
+	if err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to get PR info: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	var prInfo map[string]interface{}
+	if err := json.Unmarshal(output, &prInfo); err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     "Failed to parse PR info",
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	branchName := prInfo["headRefName"].(string)
+	
+	updateProgress(fmt.Sprintf("Setting up worktree for branch %s...", branchName))
+
+	timestamp := time.Now().Unix()
+	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%04x-web-agent-pr", timestamp&0xFFFF))
+	worktreePath := filepath.Join(worktreeBasePath, repo)
+
+	if err := os.MkdirAll(worktreeBasePath, 0755); err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to create worktree directory: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	repoPath := config.RepoPath
+	gitdir, _ := exec.Command("git", "-C", repoPath, "rev-parse", "--git-dir").Output()
+	if len(gitdir) > 0 {
+		gitdir := strings.TrimSpace(string(gitdir))
+		if strings.HasPrefix(gitdir, "gitdir: ") {
+			gitdir = strings.TrimPrefix(gitdir, "gitdir: ")
+			gitdir = strings.TrimSpace(gitdir)
+			gitdir = filepath.Clean(filepath.Join(repoPath, gitdir))
+			repoPath = filepath.Dir(filepath.Dir(gitdir))
+			log.Printf("Detected worktree, using main repo: %s", repoPath)
+		}
+	}
+
+	updateProgress("Fetching latest changes...")
+	exec.Command("git", "-C", repoPath, "fetch", "origin").Run()
+
+	updateProgress("Creating worktree...")
+	if err := exec.Command("git", "-C", repoPath, "worktree", "add", worktreePath, branchName).Run(); err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to create worktree: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	defer func() {
+		log.Printf("Removing worktree at %s", worktreePath)
+		exec.Command("git", "-C", repoPath, "worktree", "remove", "--force", worktreePath).Run()
+	}()
+
+	updateProgress("Analyzing review comments with Copilot...")
+
+	copilotPath := "/usr/local/bin/github-copilot-cli"
+	prompt := fmt.Sprintf(`Review comments for PR #%d:
+
+%s
+
+Please analyze these review comments and apply the requested changes to the codebase.
+Make the necessary code modifications to address all the feedback.`, prNumber, reviewText)
+
+	cmd = exec.Command(copilotPath, "--allow-all-tools")
+	cmd.Dir = worktreePath
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Env = os.Environ()
+
+	var copilotOut bytes.Buffer
+	var copilotErr bytes.Buffer
+	cmd.Stdout = &copilotOut
+	cmd.Stderr = &copilotErr
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("Copilot command failed: %v, stderr: %s", err, copilotErr.String())
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to process review: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	updateProgress("Committing changes...")
+
+	exec.Command("git", "-C", worktreePath, "add", ".").Run()
+	commitMsg := fmt.Sprintf("Address review comments for PR #%d\n\nAuto-generated by AirGit agent", prNumber)
+	if err := exec.Command("git", "-C", worktreePath, "commit", "-m", commitMsg).Run(); err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     "No changes to commit",
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	updateProgress("Pushing changes...")
+	if err := exec.Command("git", "-C", worktreePath, "push", "origin", branchName).Run(); err != nil {
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to push changes: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	agentStatusMutex.Lock()
+	agentStatus[issueNumber] = AgentStatus{
+		IssueNumber: issueNumber,
+		Status:      "completed",
+		Message:     "Review comments addressed and pushed",
+		PRNumber:    prNumber,
+		PRURL:       fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber),
+		StartTime:   startTime,
+		EndTime:     time.Now(),
+	}
+	agentStatusMutex.Unlock()
+}
+

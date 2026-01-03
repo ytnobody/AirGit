@@ -96,13 +96,19 @@
                 <div id="issues-panel" class="flex-1 flex flex-col mb-4 bg-sky-50 border border-sky-200 rounded-lg p-4 overflow-hidden">
                     <div class="flex justify-between items-center mb-3">
                         <h3 class="text-sm font-bold text-sky-600">📋 Issues</h3>
-                        <button id="issues-refresh-btn" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Refresh issues">🔄</button>
+                        <div class="flex gap-2">
+                            <button id="view-toggle-btn" class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Toggle view">View: Issues</button>
+                            <button id="issues-refresh-btn" class="bg-sky-500 hover:bg-sky-600 text-white px-2 py-1 rounded text-xs transition-colors" title="Refresh">🔄</button>
+                        </div>
                     </div>
                     <div class="mb-2">
                         <input id="issues-search" type="text" placeholder="Search issues..." class="w-full bg-white border border-sky-300 rounded px-2 py-1 text-gray-800 placeholder-gray-500 text-xs focus:outline-none focus:border-sky-400">
                     </div>
                     <div id="issues-list" class="flex-1 space-y-1 overflow-y-auto">
                         <div class="text-center text-gray-600 text-xs py-4">Loading issues...</div>
+                    </div>
+                    <div id="prs-list" class="flex-1 space-y-1 overflow-y-auto hidden">
+                        <div class="text-center text-gray-600 text-xs py-4">Loading PRs...</div>
                     </div>
                     <div id="issues-error" class="hidden mt-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-xs"></div>
                 </div>
@@ -426,6 +432,21 @@
             </div>
         </div>
 
+        <!-- PR Reviews Modal -->
+        <div id="pr-reviews-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
+            <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-[80vh] flex flex-col border border-sky-200">
+                <h2 class="text-lg font-bold text-sky-600 mb-2">PR Reviews</h2>
+                <div id="pr-reviews-info" class="text-sm text-gray-600 mb-4"></div>
+                <div id="pr-reviews-content" class="flex-1 overflow-y-auto space-y-3 mb-4">
+                    <div class="text-center text-gray-600 text-sm">Loading reviews...</div>
+                </div>
+                <div class="space-y-2">
+                    <button id="pr-apply-review-btn" class="w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors">🤖 Apply Review Comments with Agent</button>
+                    <button id="pr-reviews-modal-close-btn" class="w-full bg-sky-100 hover:bg-sky-200 px-4 py-2 rounded text-gray-700 text-sm">Close</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Commits Modal -->
         <div id="commits-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 safe-area-inset-bottom">
             <div class="bg-sky-50 rounded-lg p-6 w-full max-w-sm max-h-96 flex flex-col border border-sky-200">
@@ -526,12 +547,23 @@
         const pushTagError = document.getElementById('push-tag-error');
         const issuesPanel = document.getElementById('issues-panel');
         const issuesError = document.getElementById('issues-error');
+        const prsList = document.getElementById('prs-list');
+        const viewToggleBtn = document.getElementById('view-toggle-btn');
+        const prReviewsModal = document.getElementById('pr-reviews-modal');
+        const prReviewsInfo = document.getElementById('pr-reviews-info');
+        const prReviewsContent = document.getElementById('pr-reviews-content');
+        const prApplyReviewBtn = document.getElementById('pr-apply-review-btn');
+        const prReviewsModalCloseBtn = document.getElementById('pr-reviews-modal-close-btn');
         let currentIssuesUrl = null;
         let currentEditingRemote = null;
         let selectedTagForPush = null;
         let allIssues = [];  // Store all issues for filtering
         let issuesOwner = null;  // GitHub repo owner
         let issuesRepo = null;   // GitHub repo name
+        let currentView = 'issues'; // 'issues' or 'prs'
+        let allPRs = [];
+        let currentPRNumber = null;
+        let currentIssueForReview = null;
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -1174,13 +1206,272 @@
             displayFilteredIssues(filtered);
         });
 
+        // View toggle button
+        viewToggleBtn.addEventListener('click', () => {
+            if (currentView === 'issues') {
+                currentView = 'prs';
+                viewToggleBtn.textContent = 'View: PRs';
+                document.getElementById('issues-list').classList.add('hidden');
+                document.getElementById('issues-search').classList.add('hidden');
+                prsList.classList.remove('hidden');
+                loadGitHubPRs();
+            } else {
+                currentView = 'issues';
+                viewToggleBtn.textContent = 'View: Issues';
+                prsList.classList.add('hidden');
+                document.getElementById('issues-list').classList.remove('hidden');
+                document.getElementById('issues-search').classList.remove('hidden');
+                loadGitHubIssues();
+            }
+        });
+
+        // Load GitHub PRs
+        async function loadGitHubPRs() {
+            issuesError.classList.add('hidden');
+            prsList.innerHTML = '<div class="text-center text-gray-600 text-xs py-2">Loading PRs...</div>';
+
+            try {
+                const url = new URL('/api/github/prs', window.location.origin);
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log('PRs response:', data);
+
+                if (response.ok) {
+                    issuesOwner = data.owner;
+                    issuesRepo = data.repo;
+                    if (data.error) {
+                        showIssuesError(`Error fetching PRs: ${data.error}`);
+                    } else if (data.prs && data.prs.length > 0) {
+                        allPRs = data.prs;
+                        displayPRs(allPRs);
+                    } else {
+                        prsList.innerHTML = '<div class="text-center text-gray-600 text-xs py-2">No open PRs found</div>';
+                    }
+                } else {
+                    showIssuesError(data.error || 'Could not fetch PRs');
+                }
+            } catch (error) {
+                console.error('PRs load error:', error);
+                showIssuesError('Connection error: ' + error.message);
+            }
+        }
+
+        function displayPRs(prs) {
+            if (prs.length === 0) {
+                prsList.innerHTML = '<div class="text-center text-gray-600 text-sm py-4">No PRs found</div>';
+                return;
+            }
+
+            prsList.innerHTML = prs.map(pr => {
+                const prUrl = pr.url || `https://github.com/${issuesOwner}/${issuesRepo}/pull/${pr.number}`;
+                const author = (pr.author && pr.author.login) ? pr.author.login : 'unknown';
+                
+                return `
+                    <div class="bg-white p-2 rounded border border-sky-200 hover:bg-sky-100 transition-colors">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-semibold text-sky-700"><a href="${prUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">#${pr.number} ${pr.title}</a></div>
+                                <div class="text-xs text-gray-500 mt-1">Author: ${author}</div>
+                                <div class="text-xs text-gray-500">Branch: ${pr.headRefName || 'unknown'}</div>
+                            </div>
+                            <button class="pr-review-btn bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded transition-colors whitespace-nowrap" data-pr-number="${pr.number}" data-pr-title="${pr.title.replace(/"/g, '&quot;')}">
+                                📝 Reviews
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Attach event listeners to review buttons
+            document.querySelectorAll('.pr-review-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const prNumber = btn.dataset.prNumber;
+                    const prTitle = btn.dataset.prTitle;
+                    await showPRReviews(prNumber, prTitle);
+                });
+            });
+        }
+
+        async function showPRReviews(prNumber, prTitle) {
+            currentPRNumber = parseInt(prNumber);
+            prReviewsInfo.textContent = `PR #${prNumber}: ${prTitle}`;
+            prReviewsContent.innerHTML = '<div class="text-center text-gray-600 text-sm">Loading reviews...</div>';
+            prReviewsModal.classList.remove('hidden');
+
+            try {
+                const url = new URL('/api/github/pr/reviews', window.location.origin);
+                url.searchParams.append('pr_number', prNumber);
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log('Reviews data:', data);
+
+                if (response.ok) {
+                    displayReviews(data);
+                } else {
+                    prReviewsContent.innerHTML = `<div class="text-red-600 text-sm">${data.error || 'Failed to load reviews'}</div>`;
+                }
+            } catch (error) {
+                console.error('Reviews load error:', error);
+                prReviewsContent.innerHTML = `<div class="text-red-600 text-sm">Connection error: ${error.message}</div>`;
+            }
+        }
+
+        function displayReviews(data) {
+            const reviews = data.reviews || [];
+            const comments = data.comments || [];
+
+            let html = '';
+
+            if (reviews.length === 0 && comments.length === 0) {
+                html = '<div class="text-center text-gray-600 text-sm">No reviews or comments yet</div>';
+            } else {
+                if (reviews.length > 0) {
+                    html += '<div class="mb-3"><h3 class="text-sm font-bold text-purple-600 mb-2">Reviews:</h3>';
+                    reviews.forEach(review => {
+                        const state = review.state || 'COMMENTED';
+                        const stateClass = state === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                                         state === 'CHANGES_REQUESTED' ? 'bg-red-100 text-red-700' : 
+                                         'bg-gray-100 text-gray-700';
+                        const author = (review.author && review.author.login) ? review.author.login : 'unknown';
+                        
+                        html += `
+                            <div class="bg-white p-2 rounded border border-purple-200 mb-2">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="text-xs font-semibold text-gray-700">${author}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded ${stateClass}">${state}</span>
+                                </div>
+                                ${review.body ? `<div class="text-xs text-gray-600 mt-1">${review.body}</div>` : ''}
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                if (comments.length > 0) {
+                    html += '<div><h3 class="text-sm font-bold text-purple-600 mb-2">Comments:</h3>';
+                    comments.forEach(comment => {
+                        const author = (comment.author && comment.author.login) ? comment.author.login : 'unknown';
+                        html += `
+                            <div class="bg-white p-2 rounded border border-purple-200 mb-2">
+                                <div class="text-xs font-semibold text-gray-700 mb-1">${author}</div>
+                                <div class="text-xs text-gray-600">${comment.body || '(No comment text)'}</div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+            }
+
+            prReviewsContent.innerHTML = html;
+        }
+
+        prApplyReviewBtn.addEventListener('click', async () => {
+            if (!currentPRNumber) return;
+
+            // Collect all review text
+            const reviews = prReviewsContent.querySelectorAll('[class*="bg-white"]');
+            let reviewText = '';
+            reviews.forEach(review => {
+                const text = review.textContent.trim();
+                if (text) reviewText += text + '\n\n';
+            });
+
+            if (!reviewText) {
+                showNotification('No review comments to apply');
+                return;
+            }
+
+            prApplyReviewBtn.disabled = true;
+            prApplyReviewBtn.textContent = '⏳ Processing...';
+
+            try {
+                // Find the issue number associated with this PR
+                const pr = allPRs.find(p => p.number === currentPRNumber);
+                let issueNumber = currentPRNumber; // Default to PR number
+                
+                // Try to extract issue number from PR body
+                if (pr && pr.body) {
+                    const match = pr.body.match(/(?:Fixes|Closes|Resolves)\s+#(\d+)/i);
+                    if (match) {
+                        issueNumber = parseInt(match[1]);
+                    }
+                }
+
+                currentIssueForReview = issueNumber;
+
+                const response = await fetch('/api/agent/apply-review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        issue_number: issueNumber,
+                        pr_number: currentPRNumber,
+                        review_text: reviewText
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showNotification('✓ Agent started processing review comments');
+                    prReviewsModal.classList.add('hidden');
+                    
+                    // Poll for status
+                    const pollStatus = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch(`/api/agent/status?issue_number=${issueNumber}`);
+                            const status = await statusResponse.json();
+                            
+                            if (statusResponse.ok && status) {
+                                const progressEl = document.querySelector(`.agent-progress-${issueNumber}`);
+                                if (progressEl) {
+                                    progressEl.textContent = status.message;
+                                    progressEl.classList.remove('hidden');
+                                }
+
+                                if (status.status === 'completed') {
+                                    clearInterval(pollStatus);
+                                    showNotification('✓ Review comments applied successfully!');
+                                } else if (status.status === 'failed') {
+                                    clearInterval(pollStatus);
+                                    showNotification('✗ Failed: ' + status.message);
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Status poll error:', err);
+                        }
+                    }, 2000);
+
+                    setTimeout(() => clearInterval(pollStatus), 300000); // 5 min timeout
+                } else {
+                    showNotification('✗ Failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Apply review error:', error);
+                showNotification('✗ Error: ' + error.message);
+            } finally {
+                prApplyReviewBtn.disabled = false;
+                prApplyReviewBtn.textContent = '🤖 Apply Review Comments with Agent';
+            }
+        });
+
+        prReviewsModalCloseBtn.addEventListener('click', () => {
+            prReviewsModal.classList.add('hidden');
+        });
+
         // Refresh button listener
         document.getElementById('issues-refresh-btn').addEventListener('click', async () => {
             const btn = document.getElementById('issues-refresh-btn');
             btn.disabled = true;
             btn.textContent = '⏳';
             try {
-                await loadGitHubIssues();
+                if (currentView === 'issues') {
+                    await loadGitHubIssues();
+                } else {
+                    await loadGitHubPRs();
+                }
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🔄';
