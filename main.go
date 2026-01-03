@@ -2512,7 +2512,9 @@ func handleListGitHubIssues(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Get GitHub remote URL
+	log.Printf("handleListGitHubIssues: Getting GitHub remote URL from: %s", config.RepoPath)
 	output, err := executeCommand("git", "config", "--get", "remote.origin.url")
+	log.Printf("handleListGitHubIssues: git config result: output='%s', err=%v", output, err)
 	if err != nil || strings.TrimSpace(output) == "" {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
