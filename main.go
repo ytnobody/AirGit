@@ -3874,8 +3874,8 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	
 	updateProgress(fmt.Sprintf("Setting up worktree for branch %s...", branchName))
 
-	timestamp := time.Now().Unix()
-	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%04x-web-agent-pr", timestamp&0xFFFF))
+	timestamp := time.Now().UnixNano() / 1000000
+	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%04x-web-agent-pr-%d", timestamp&0xFFFF, timestamp))
 	worktreePath := filepath.Join(worktreeBasePath, repo)
 
 	if err := os.MkdirAll(worktreeBasePath, 0755); err != nil {
