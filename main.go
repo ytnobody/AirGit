@@ -2620,8 +2620,8 @@ func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Title  string   `json:"title"`
-		Body   string   `json:"body"`
-		Labels []string `json:"labels"`
+		Body   string   `json:"body,omitempty"`
+		Labels []string `json:"labels,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
