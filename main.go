@@ -3587,7 +3587,21 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 
 	updateProgress("Analyzing review comments with Copilot...")
 
-	copilotPath := "/usr/local/bin/github-copilot-cli"
+	// Use copilot binary with same logic as processAgentIssue
+	homeDir, _ := os.UserHomeDir()
+	copilotPath := filepath.Join(homeDir, "bin", "copilot")
+	
+	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
+		copilotPath = "/usr/local/bin/copilot"
+	}
+	
+	// Check if copilot exists, if not try gh copilot
+	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
+		copilotPath = "gh"
+	}
+	
+	log.Printf("Using copilot at: %s", copilotPath)
+	
 	prompt := fmt.Sprintf(`Review comments for PR #%d:
 
 %s
@@ -3595,10 +3609,23 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 Please analyze these review comments and apply the requested changes to the codebase.
 Make the necessary code modifications to address all the feedback.`, prNumber, reviewText)
 
-	cmd = exec.Command(copilotPath, "--allow-all-tools")
+	// Filter out GH_TOKEN from environment
+	env := []string{}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GH_TOKEN=") {
+			env = append(env, e)
+		}
+	}
+
+	var cmd *exec.Cmd
+	if copilotPath == "gh" {
+		cmd = exec.Command("gh", "copilot", "--allow-all-tools")
+	} else {
+		cmd = exec.Command(copilotPath, "--allow-all-tools")
+	}
 	cmd.Dir = worktreePath
 	cmd.Stdin = strings.NewReader(prompt)
-	cmd.Env = os.Environ()
+	cmd.Env = env
 
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
