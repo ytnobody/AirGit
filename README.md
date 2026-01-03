@@ -636,11 +636,204 @@ Response:
 }
 ```
 
+### POST /api/systemd/rebuild-restart
+Rebuild the AirGit binary and restart the systemd service.
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Service rebuilt and restarted"
+}
+```
+
+## GitHub Authentication
+
+### GET /api/github/auth/status
+Check if GitHub authentication is configured and available.
+
+Response (authenticated):
+```json
+{
+  "authenticated": true,
+  "message": "GitHub authentication is available"
+}
+```
+
+Response (not authenticated):
+```json
+{
+  "authenticated": false,
+  "message": "GitHub authentication is not available"
+}
+```
+
+### POST /api/github/auth/login
+Initiate GitHub authentication flow using the `gh` CLI.
+
+Response:
+```json
+{
+  "success": true,
+  "message": "GitHub authentication initiated"
+}
+```
+
+## GitHub Pull Requests
+
+### GET /api/github/prs
+List all pull requests from the GitHub repository.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Response:
+```json
+{
+  "owner": "username",
+  "repo": "repository-name",
+  "prs": [
+    {
+      "number": 5,
+      "title": "Add new feature",
+      "state": "open",
+      "author": "developer",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T11:00:00Z",
+      "url": "https://github.com/username/repo/pull/5",
+      "headRefName": "feature/new-feature",
+      "body": "Description of the feature"
+    }
+  ]
+}
+```
+
+### GET /api/github/pr/reviews
+Get review comments for a specific pull request.
+
+Query Parameters:
+- `pr_number` (required): Pull request number
+- `repoPath` (optional): Relative path to the repository
+
+Response:
+```json
+{
+  "comments": [
+    {
+      "id": 123456,
+      "author": "reviewer",
+      "body": "This looks good",
+      "path": "src/main.go",
+      "line": 42,
+      "createdAt": "2024-01-15T11:00:00Z",
+      "url": "https://github.com/username/repo/pull/5#discussion_r123456"
+    }
+  ]
+}
+```
+
+## GitHub AI Agent API
+
+### POST /api/agent/trigger
+Manually trigger the AI agent to process a GitHub issue.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Request Body:
+```json
+{
+  "issueNumber": 15
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Agent processing started",
+  "issueNumber": 15
+}
+```
+
+### POST /api/agent/process
+Process a GitHub issue with AI agent (alias for trigger).
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Request Body:
+```json
+{
+  "issueNumber": 15
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Issue processing started",
+  "issueNumber": 15
+}
+```
+
+### GET /api/agent/status
+Get the current processing status of an issue being handled by the AI agent.
+
+Query Parameters:
+- `issue_number` (required): Issue number to check status for
+
+Response (processing):
+```json
+{
+  "issueNumber": 15,
+  "status": "running",
+  "message": "Processing issue #15",
+  "startTime": "2024-01-15T10:30:00Z"
+}
+```
+
+Response (completed):
+```json
+{
+  "issueNumber": 15,
+  "status": "completed",
+  "message": "Issue resolved",
+  "prNumber": 42,
+  "prUrl": "https://github.com/username/repo/pull/42",
+  "startTime": "2024-01-15T10:30:00Z",
+  "endTime": "2024-01-15T10:35:00Z"
+}
+```
+
+### POST /api/agent/apply-review
+Apply AI agent changes based on pull request review comments.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Request Body:
+```json
+{
+  "prNumber": 42
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Review comments applied",
+  "prNumber": 42
+}
+```
+
 ## How It Works
 
 1. **Frontend** (HTML5 + Tailwind CSS): Mobile-first UI with bottom navigation bar and intuitive controls
 2. **Backend** (Go):
-   - Exposes comprehensive HTTP REST API (25+ endpoints)
+   - Exposes comprehensive HTTP REST API (40+ endpoints)
    - Executes git commands locally
    - Manages multiple repositories in a base directory
    - Supports systemd service registration and management
@@ -853,7 +1046,7 @@ Local Git Repositories & Systemd User Services
 ### Components
 
 - **Frontend UI**: Bottom navigation bar with Repos, Branch, Remotes, Log, Settings buttons; central Push/Pull operation buttons
-- **REST API**: 25+ endpoints for repository, git, and systemd operations
+- **REST API**: 40+ endpoints for repository, git, and systemd operations
 - **Git Executor**: Executes git commands locally on the filesystem
 - **Repository Manager**: Handles multiple repositories within base directory
 - **Systemd Integration**: Registers and manages AirGit as a systemd user service for background operation
