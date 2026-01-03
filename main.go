@@ -472,14 +472,14 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 			// Remote has changes that we don't have - need to pull first
 			logs = append(logs, "⚠ Push rejected: remote has changes")
 			logs = append(logs, "Attempting to pull and merge...")
-			
+
 			// Try to pull with merge
 			pullOutput, pullErr := executeGitCommand("pull", remote, branch)
 			logs = append(logs, fmt.Sprintf("$ git pull %s %s", remote, branch))
 			if pullOutput != "" {
 				logs = append(logs, pullOutput)
 			}
-			
+
 			if pullErr != nil {
 				if strings.Contains(pullOutput, "CONFLICT") {
 					// Conflict detected during pull
@@ -500,9 +500,9 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 				json.NewEncoder(w).Encode(resp)
 				return
 			}
-			
+
 			logs = append(logs, "✓ Pull successful, retrying push...")
-			
+
 			// Retry push after successful pull
 			retryOutput, retryErr := executeGitCommand("push", remote, branch)
 			logs = append(logs, fmt.Sprintf("$ git push %s %s", remote, branch))
@@ -608,7 +608,7 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 			conflictFiles := getConflictFiles()
 			logs = append(logs, fmt.Sprintf("⚠ Merge conflict detected in %d file(s)", len(conflictFiles)))
 			logs = append(logs, "Attempting automatic conflict resolution...")
-			
+
 			// Try to resolve conflicts automatically
 			resolved, resolveErr := autoResolveConflicts(conflictFiles)
 			if resolveErr != nil {
@@ -625,13 +625,13 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 				json.NewEncoder(w).Encode(resp)
 				return
 			}
-			
+
 			if len(resolved) > 0 {
 				logs = append(logs, fmt.Sprintf("✓ Auto-resolved %d file(s):", len(resolved)))
 				for _, file := range resolved {
 					logs = append(logs, fmt.Sprintf("  - %s", file))
 				}
-				
+
 				// Commit the resolved changes
 				commitMsg := fmt.Sprintf("Merge %s/%s with auto-resolved conflicts", remote, branch)
 				commitOutput, commitErr := executeGitCommand("commit", "-m", commitMsg)
@@ -918,7 +918,7 @@ func getConflictFiles() []string {
 	if err != nil {
 		return []string{}
 	}
-	
+
 	var files []string
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
@@ -933,16 +933,16 @@ func getConflictFiles() []string {
 // Returns the list of successfully resolved files
 func autoResolveConflicts(conflictFiles []string) ([]string, error) {
 	var resolved []string
-	
+
 	for _, file := range conflictFiles {
 		filePath := filepath.Join(config.RepoPath, file)
-		
+
 		// Read the conflicted file
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}
-		
+
 		// Check if the conflict can be auto-resolved
 		// Simple strategy: if one side is empty or only whitespace, use the other side
 		lines := strings.Split(string(content), "\n")
@@ -951,7 +951,7 @@ func autoResolveConflicts(conflictFiles []string) ([]string, error) {
 		oursContent := ""
 		theirsContent := ""
 		conflictStart := -1
-		
+
 		for i, line := range lines {
 			if strings.HasPrefix(line, "<<<<<<<") {
 				inConflict = true
@@ -962,11 +962,11 @@ func autoResolveConflicts(conflictFiles []string) ([]string, error) {
 				// Switch from ours to theirs
 			} else if strings.HasPrefix(line, ">>>>>>>") && inConflict {
 				inConflict = false
-				
+
 				// Try to resolve
 				oursEmpty := strings.TrimSpace(oursContent) == ""
 				theirsEmpty := strings.TrimSpace(theirsContent) == ""
-				
+
 				if oursEmpty && !theirsEmpty {
 					// Use theirs
 					newContent.WriteString(theirsContent)
@@ -997,7 +997,7 @@ func autoResolveConflicts(conflictFiles []string) ([]string, error) {
 				newContent.WriteString(line + "\n")
 			}
 		}
-		
+
 		// Check if all conflicts were resolved
 		finalContent := newContent.String()
 		if !strings.Contains(finalContent, "<<<<<<<") && !strings.Contains(finalContent, "=======") && !strings.Contains(finalContent, ">>>>>>>") {
@@ -1005,20 +1005,20 @@ func autoResolveConflicts(conflictFiles []string) ([]string, error) {
 			if err := os.WriteFile(filePath, []byte(finalContent), 0644); err != nil {
 				continue
 			}
-			
+
 			// Stage the resolved file
 			if _, err := executeGitCommand("add", file); err != nil {
 				continue
 			}
-			
+
 			resolved = append(resolved, file)
 		}
 	}
-	
+
 	if len(resolved) == 0 && len(conflictFiles) > 0 {
 		return resolved, fmt.Errorf("no conflicts could be automatically resolved")
 	}
-	
+
 	return resolved, nil
 }
 
@@ -3567,13 +3567,13 @@ Implementation in progress - This is a placeholder that should be replaced with 
 
 	prURL := strings.TrimSpace(prOut.String())
 	log.Printf("PR created: %s", prURL)
-	
+
 	// Extract PR number from URL
 	prNumber := 0
 	if parts := strings.Split(prURL, "/pull/"); len(parts) == 2 {
 		fmt.Sscanf(parts[1], "%d", &prNumber)
 	}
-	
+
 	agentStatusMutex.Lock()
 	agentStatus[issueNumber] = AgentStatus{
 		IssueNumber: issueNumber,
@@ -3667,7 +3667,7 @@ func handleAgentStatus(w http.ResponseWriter, r *http.Request) {
 
 func handleListGitHubPRs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
@@ -3716,7 +3716,7 @@ func handleListGitHubPRs(w http.ResponseWriter, r *http.Request) {
 
 func handleGetPRReviews(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
@@ -3768,7 +3768,7 @@ func handleGetPRReviews(w http.ResponseWriter, r *http.Request) {
 
 func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Method not allowed"})
@@ -3807,7 +3807,7 @@ func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
 
 func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	startTime := time.Now()
-	
+
 	updateProgress := func(message string) {
 		agentStatusMutex.Lock()
 		if status, ok := agentStatus[issueNumber]; ok {
@@ -3836,7 +3836,7 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	}
 
 	owner, repo := parseGitHubURL(strings.TrimSpace(string(remoteURL)))
-	
+
 	var cmd *exec.Cmd
 	cmd = exec.Command("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "headRefName,baseRefName")
 	cmd.Dir = config.RepoPath
@@ -3871,12 +3871,12 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	}
 
 	branchName := prInfo["headRefName"].(string)
-	
+
 	updateProgress(fmt.Sprintf("Setting up worktree for branch %s...", branchName))
 
 	timestamp := time.Now().UnixNano() / 1000000
 	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%04x-web-agent-pr-%d", timestamp&0xFFFF, timestamp))
-	worktreePath := filepath.Join(worktreeBasePath, repo)
+	worktreePath := worktreeBasePath
 
 	if err := os.MkdirAll(worktreeBasePath, 0755); err != nil {
 		agentStatusMutex.Lock()
@@ -3913,7 +3913,7 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	listCmd := exec.Command("git", "-C", repoPath, "worktree", "list", "--porcelain")
 	listOutput, _ := listCmd.Output()
 	worktrees := string(listOutput)
-	
+
 	// Parse worktree list to find if branch is in use
 	lines := strings.Split(worktrees, "\n")
 	var conflictingWorktree string
@@ -3933,7 +3933,7 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 			}
 		}
 	}
-	
+
 	// Remove conflicting worktree if found
 	if conflictingWorktree != "" {
 		log.Printf("Found existing worktree for branch %s at %s, removing...", branchName, conflictingWorktree)
@@ -3958,7 +3958,11 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 
 	defer func() {
 		log.Printf("Removing worktree at %s", worktreePath)
-		exec.Command("git", "-C", repoPath, "worktree", "remove", "--force", worktreePath).Run()
+		// Use -f flag to force removal even if there are changes
+		cmd := exec.Command("git", "-C", repoPath, "worktree", "remove", "-f", worktreePath)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("worktree removal warning: %v, output: %s", err, string(out))
+		}
 	}()
 
 	updateProgress("Analyzing review comments with Copilot...")
@@ -3966,18 +3970,18 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	// Use copilot binary with same logic as processAgentIssue
 	homeDir, _ := os.UserHomeDir()
 	copilotPath := filepath.Join(homeDir, "bin", "copilot")
-	
+
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
 		copilotPath = "/usr/local/bin/copilot"
 	}
-	
+
 	// Check if copilot exists, if not try gh copilot
 	if _, err := os.Stat(copilotPath); os.IsNotExist(err) {
 		copilotPath = "gh"
 	}
-	
+
 	log.Printf("Using copilot at: %s", copilotPath)
-	
+
 	prompt := fmt.Sprintf(`Review comments for PR #%d:
 
 %s
@@ -4067,4 +4071,3 @@ Make the necessary code modifications to address all the feedback.`, prNumber, r
 	}
 	agentStatusMutex.Unlock()
 }
-
