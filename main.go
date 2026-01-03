@@ -2743,9 +2743,33 @@ func parseGitHubURL(remoteURL string) (owner, repo string) {
 	return "", ""
 }
 
+// getMainRepoPath returns the main repository path, resolving worktree paths
+func getMainRepoPath(repoPath string) string {
+	gitDirFile := filepath.Join(repoPath, ".git")
+	
+	// Check if .git is a file (worktree) or directory (main repo)
+	if data, err := os.ReadFile(gitDirFile); err == nil {
+		gitdir := strings.TrimSpace(string(data))
+		if strings.HasPrefix(gitdir, "gitdir: ") {
+			// This is a worktree, extract main repo path
+			gitdir = strings.TrimPrefix(gitdir, "gitdir: ")
+			// gitdir points to .git/worktrees/XXX
+			// Main repo is at the parent of .git
+			mainGitDir := filepath.Dir(filepath.Dir(gitdir))
+			return filepath.Dir(mainGitDir)
+		}
+	}
+	
+	// Not a worktree, return as-is
+	return repoPath
+}
+
 func executeCommand(name string, args ...string) (string, error) {
+	// Use main repo path to avoid permission issues with worktrees
+	repoPath := getMainRepoPath(config.RepoPath)
+	
 	cmd := exec.Command(name, args...)
-	cmd.Dir = config.RepoPath
+	cmd.Dir = repoPath
 
 	var output bytes.Buffer
 	cmd.Stdout = &output
