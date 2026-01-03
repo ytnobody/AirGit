@@ -3101,7 +3101,7 @@ func processAgentIssue(issueNumber int, issueTitle, issueBody string) {
 
 	timestamp := time.Now().UnixNano() / 1000000
 	branchName := fmt.Sprintf("airgit/issue-%d-%d", issueNumber, timestamp)
-	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%d-issue-agent-%d", issueNumber, timestamp))
+	worktreeBasePath := filepath.Join("/var/tmp/vibe-kanban/worktrees", fmt.Sprintf("%04x-issue-%d-%d", timestamp&0xFFFF, issueNumber, timestamp))
 	// worktree is created directly at worktreeBasePath, no AirGit subdirectory
 	worktreePath := worktreeBasePath
 	log.Printf("processAgentIssue: branch=%s, worktreePath=%s", branchName, worktreePath)
