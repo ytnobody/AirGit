@@ -3491,8 +3491,11 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		agentStatusMutex.Unlock()
 		
 		// Clean up worktree
-		if err := removeWorktree(worktreePath); err != nil {
-			log.Printf("Failed to remove worktree: %v", err)
+		log.Printf("Removing git worktree at %s", worktreePath)
+		cleanupCmd := exec.Command("git", "worktree", "remove", "-f", worktreePath)
+		cleanupCmd.Dir = repoPath
+		if out, err := cleanupCmd.CombinedOutput(); err != nil {
+			log.Printf("worktree removal warning: %v, output: %s", err, string(out))
 		}
 		return
 	}
