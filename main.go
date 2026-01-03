@@ -3450,39 +3450,6 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		return
 	}
 
-	updateProgress("Writing implementation to file...")
-	// Create a simple implementation file as a placeholder
-	// In a real implementation, you would parse the copilot output and apply changes
-	implementationFile := filepath.Join(worktreePath, fmt.Sprintf("ISSUE_%d_IMPLEMENTATION.md", issueNumber))
-	implementationContent := fmt.Sprintf(`# Implementation for Issue #%d
-
-## Issue Title
-%s
-
-## Issue Description
-%s
-
-## Copilot Suggestion
-%s
-
-## Status
-Implementation in progress - This is a placeholder that should be replaced with actual code changes.
-`, issueNumber, issueTitle, issueBody, ghOutput)
-
-	if err := os.WriteFile(implementationFile, []byte(implementationContent), 0644); err != nil {
-		log.Printf("Failed to write implementation file: %v", err)
-		agentStatusMutex.Lock()
-		agentStatus[issueNumber] = AgentStatus{
-			IssueNumber: issueNumber,
-			Status:      "failed",
-			Message:     fmt.Sprintf("Failed to write implementation: %v", err),
-			StartTime:   startTime,
-			EndTime:     time.Now(),
-		}
-		agentStatusMutex.Unlock()
-		return
-	}
-
 	updateProgress("Committing changes to branch...")
 	// Commit changes
 	log.Printf("Committing changes in worktree")
@@ -3540,7 +3507,7 @@ Implementation in progress - This is a placeholder that should be replaced with 
 	// Use main repo path instead to avoid permission issues
 	log.Printf("Creating PR for issue #%d", issueNumber)
 	prTitle := fmt.Sprintf("Issue #%d: %s", issueNumber, issueTitle)
-	prBody := fmt.Sprintf("Fixes #%d\n\nAuto-generated implementation by AirGit agent.\n\n## Changes\n\nSee implementation file for details.", issueNumber)
+	prBody := fmt.Sprintf("Fixes #%d\n\nAuto-generated implementation by AirGit agent.", issueNumber)
 
 	prCmd := exec.Command("gh", "pr", "create", "--title", prTitle, "--body", prBody, "--base", defaultBranch, "--head", branchName)
 	prCmd.Dir = repoPath // Use main repo path, not worktree
