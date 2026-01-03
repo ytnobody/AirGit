@@ -1090,6 +1090,71 @@
             loadGitHubIssues();
         }
         
+        // Helper function to start polling for agent status
+        async function startAgentPolling(issueNumber, btn, progressEl) {
+            let maxAttempts = 5400; // 180 minutes / 3 hours (5400 * 2 seconds)
+            const pollInterval = setInterval(async () => {
+                maxAttempts--;
+                if (maxAttempts <= 0) {
+                    clearInterval(pollInterval);
+                    btn.textContent = '⏱️ Timeout';
+                    btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+                    btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                    btn.disabled = false;
+                    if (progressEl) {
+                        progressEl.classList.add('hidden');
+                    }
+                    return;
+                }
+                
+                try {
+                    const statusResponse = await fetch(`/api/agent/status?issue_number=${issueNumber}`);
+                    if (statusResponse.ok) {
+                        const status = await statusResponse.json();
+                        
+                        // Update progress message
+                        if (progressEl && status.message) {
+                            progressEl.textContent = '⚙️ ' + status.message;
+                            progressEl.classList.remove('hidden');
+                        }
+                        
+                        if (status.status === 'completed') {
+                            clearInterval(pollInterval);
+                            btn.textContent = '✅ Done';
+                            btn.classList.add('bg-green-600', 'hover:bg-green-500');
+                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                            btn.disabled = false;
+                            if (progressEl) {
+                                progressEl.textContent = '✓ ' + status.message;
+                            }
+                        } else if (status.status === 'failed') {
+                            clearInterval(pollInterval);
+                            btn.textContent = '❌ Error';
+                            btn.classList.add('bg-red-600', 'hover:bg-red-500');
+                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
+                            btn.disabled = false;
+                            if (progressEl) {
+                                // Show full error message in progress element
+                                const errorText = status.message || 'Unknown error';
+                                progressEl.innerHTML = `<span class="font-semibold">✗ Error:</span><br><span class="whitespace-pre-wrap">${errorText}</span>`;
+                                progressEl.classList.remove('text-sky-600', 'hidden');
+                                progressEl.classList.add('text-red-600');
+                            }
+                            if (status.message) {
+                                let errorMsg = `Agent failed: ${status.message}`;
+                                if (status.message.includes('OAuth') || status.message.includes('authenticate')) {
+                                    errorMsg += ' → Go to Settings to authenticate with GitHub.';
+                                }
+                                showErrorNotification(errorMsg, 15000);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Status polling error:', err);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
         function displayFilteredIssues(issuesToDisplay) {
             const issuesList = document.getElementById('issues-list');
             if (issuesToDisplay.length === 0) {
@@ -1159,68 +1224,7 @@
                         });
                         
                         if (response.ok) {
-                            // Poll for status
-                            let maxAttempts = 5400; // 180 minutes / 3 hours (5400 * 2 seconds)
-                            const pollInterval = setInterval(async () => {
-                                maxAttempts--;
-                                if (maxAttempts <= 0) {
-                                    clearInterval(pollInterval);
-                                    btn.textContent = '⏱️ Timeout';
-                                    btn.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
-                                    btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                    btn.disabled = false;
-                                    if (progressEl) {
-                                        progressEl.classList.add('hidden');
-                                    }
-                                    return;
-                                }
-                                
-                                try {
-                                    const statusResponse = await fetch(`/api/agent/status?issue_number=${issueNumber}`);
-                                    if (statusResponse.ok) {
-                                        const status = await statusResponse.json();
-                                        
-                                        // Update progress message
-                                        if (progressEl && status.message) {
-                                            progressEl.textContent = '⚙️ ' + status.message;
-                                            progressEl.classList.remove('hidden');
-                                        }
-                                        
-                                        if (status.status === 'completed') {
-                                            clearInterval(pollInterval);
-                                            btn.textContent = '✅ Done';
-                                            btn.classList.add('bg-green-600', 'hover:bg-green-500');
-                                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                            btn.disabled = false;
-                                            if (progressEl) {
-                                                progressEl.textContent = '✓ ' + status.message;
-                                            }
-                                        } else if (status.status === 'failed') {
-                                            clearInterval(pollInterval);
-                                            btn.textContent = '❌ Error';
-                                            btn.classList.add('bg-red-600', 'hover:bg-red-500');
-                                            btn.classList.remove('bg-sky-600', 'hover:bg-sky-500');
-                                            btn.disabled = false;
-                                            if (progressEl) {
-                                                // Show full error message in progress element
-                                                const errorText = status.message || 'Unknown error';
-                                                progressEl.innerHTML = `<span class="font-semibold">✗ Error:</span><br><span class="whitespace-pre-wrap">${errorText}</span>`;
-                                                progressEl.classList.remove('text-sky-600', 'hidden');
-                                                progressEl.classList.add('text-red-600');
-                                            }
-                                            if (status.message) {
-                                                let errorMsg = `Agent failed: ${status.message}`;
-                                                if (status.message.includes('OAuth') || status.message.includes('authenticate')) {
-                                                    errorMsg += ' → Go to Settings to authenticate with GitHub.';
-                                                }
-                                                showErrorNotification(errorMsg, 15000);
-                                            }
-                                        }
-                                    }
-                                } catch (err) {
-                                    console.error('Status polling error:', err);
-                                }
-                            }, 2000); // Poll every 2 seconds
+                            startAgentPolling(parseInt(issueNumber), btn, progressEl);
                         } else {
                             btn.textContent = '❌ Error';
                             btn.classList.add('bg-red-600', 'hover:bg-red-500');
@@ -1236,6 +1240,41 @@
                     }
                 });
             });
+            
+            // Check for already running agents and restore their UI state
+            checkAndRestoreRunningAgents(limitedIssues);
+        }
+        
+        // Check for running agents and restore UI state after page reload
+        async function checkAndRestoreRunningAgents(issuesToCheck) {
+            for (const issue of issuesToCheck) {
+                try {
+                    const statusResponse = await fetch(`/api/agent/status?issue_number=${issue.number}`);
+                    if (statusResponse.ok) {
+                        const status = await statusResponse.json();
+                        
+                        // Only restore if the agent is still running or pending
+                        if (status.status === 'running' || status.status === 'pending') {
+                            const btn = document.querySelector(`.agent-run-btn[data-issue-number="${issue.number}"]`);
+                            const progressEl = document.querySelector(`.agent-progress-${issue.number}`);
+                            
+                            if (btn && progressEl) {
+                                console.log(`Restoring running agent for issue #${issue.number}`);
+                                btn.disabled = true;
+                                btn.textContent = '⏳ Running...';
+                                progressEl.textContent = '⚙️ ' + (status.message || 'Processing...');
+                                progressEl.classList.remove('hidden', 'text-red-600');
+                                progressEl.classList.add('text-sky-600');
+                                
+                                // Resume polling for this agent
+                                startAgentPolling(issue.number, btn, progressEl);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Failed to check agent status for issue #${issue.number}:`, err);
+                }
+            }
         }
         
         document.getElementById('issues-search').addEventListener('input', (e) => {
@@ -1351,6 +1390,44 @@
                     await showPRReviews(prNumber, prTitle);
                 });
             });
+            
+            // Check for running review agents and restore UI state after page reload
+            checkAndRestoreRunningPRAgents(prs);
+        }
+        
+        // Check for running PR agents and restore UI state after page reload
+        async function checkAndRestoreRunningPRAgents(prsToCheck) {
+            for (const pr of prsToCheck) {
+                try {
+                    // Extract issue number from PR body if available
+                    let issueNumber = pr.number;
+                    if (pr.body) {
+                        const match = pr.body.match(/(?:Fixes|Closes|Resolves)\s+#(\d+)/i);
+                        if (match) {
+                            issueNumber = parseInt(match[1]);
+                        }
+                    }
+                    
+                    const statusResponse = await fetch(`/api/agent/status?issue_number=${issueNumber}`);
+                    if (statusResponse.ok) {
+                        const status = await statusResponse.json();
+                        
+                        // Only restore if the agent is still running or pending
+                        if (status.status === 'running' || status.status === 'pending') {
+                            const reviewProgressEl = document.querySelector(`.review-progress-${pr.number}`);
+                            
+                            if (reviewProgressEl) {
+                                console.log(`Restoring running PR review agent for PR #${pr.number}`);
+                                reviewProgressEl.textContent = '📝 ' + (status.message || 'Processing...');
+                                reviewProgressEl.classList.remove('hidden', 'text-red-600');
+                                reviewProgressEl.classList.add('text-sky-600');
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Failed to check agent status for PR #${pr.number}:`, err);
+                }
+            }
         }
 
         async function showPRReviews(prNumber, prTitle) {
