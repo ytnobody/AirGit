@@ -3908,6 +3908,39 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 	updateProgress("Fetching latest changes...")
 	exec.Command("git", "-C", repoPath, "fetch", "origin").Run()
 
+	updateProgress("Checking for existing worktrees...")
+	// Check if branch is already checked out in another worktree
+	listCmd := exec.Command("git", "-C", repoPath, "worktree", "list", "--porcelain")
+	listOutput, _ := listCmd.Output()
+	worktrees := string(listOutput)
+	
+	// Parse worktree list to find if branch is in use
+	lines := strings.Split(worktrees, "\n")
+	var conflictingWorktree string
+	for i := 0; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "branch ") {
+			currentBranch := strings.TrimPrefix(lines[i], "branch ")
+			currentBranch = strings.TrimPrefix(currentBranch, "refs/heads/")
+			if currentBranch == branchName {
+				// Find the worktree path (should be a few lines before)
+				for j := i - 1; j >= 0 && j > i-5; j-- {
+					if strings.HasPrefix(lines[j], "worktree ") {
+						conflictingWorktree = strings.TrimPrefix(lines[j], "worktree ")
+						break
+					}
+				}
+				break
+			}
+		}
+	}
+	
+	// Remove conflicting worktree if found
+	if conflictingWorktree != "" {
+		log.Printf("Found existing worktree for branch %s at %s, removing...", branchName, conflictingWorktree)
+		updateProgress(fmt.Sprintf("Removing existing worktree at %s...", conflictingWorktree))
+		exec.Command("git", "-C", repoPath, "worktree", "remove", "-f", conflictingWorktree).Run()
+	}
+
 	updateProgress("Creating worktree...")
 	if err := exec.Command("git", "-C", repoPath, "worktree", "add", worktreePath, branchName).Run(); err != nil {
 		agentStatusMutex.Lock()
