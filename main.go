@@ -2765,11 +2765,8 @@ func getMainRepoPath(repoPath string) string {
 }
 
 func executeCommand(name string, args ...string) (string, error) {
-	// Use main repo path to avoid permission issues with worktrees
-	repoPath := getMainRepoPath(config.RepoPath)
-	
 	cmd := exec.Command(name, args...)
-	cmd.Dir = repoPath
+	cmd.Dir = config.RepoPath
 
 	var output bytes.Buffer
 	cmd.Stdout = &output
