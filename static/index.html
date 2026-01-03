@@ -2720,16 +2720,19 @@
                     rebuildBtnText.textContent = '✓ Done';
                     rebuildSpinner.classList.add('hidden');
                     
-                    // Re-enable after 3 seconds
-                    setTimeout(() => {
-                        rebuildStatusBadge.textContent = 'Ready';
-                        rebuildStatusBadge.className = 'px-2 py-1 rounded text-xs font-medium bg-sky-100 text-gray-600';
-                        rebuildStatusMessage.textContent = '';
-                        rebuildRestartBtn.disabled = false;
-                        rebuildRestartBtn.className = 'w-full bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded text-white text-sm font-medium transition-colors';
-                        rebuildBtnText.classList.remove('hidden');
-                        rebuildBtnText.textContent = '🔨 Build & Restart';
-                    }, 3000);
+                    // Show countdown and reload browser after 3 seconds
+                    let countdown = 3;
+                    rebuildStatusMessage.textContent = `✓ Build successful! Reloading in ${countdown}s...`;
+                    const countdownInterval = setInterval(() => {
+                        countdown--;
+                        if (countdown > 0) {
+                            rebuildStatusMessage.textContent = `✓ Build successful! Reloading in ${countdown}s...`;
+                        } else {
+                            clearInterval(countdownInterval);
+                            rebuildStatusMessage.textContent = '🔄 Reloading...';
+                            window.location.reload();
+                        }
+                    }, 1000);
                 } else {
                     // Error
                     rebuildStatusMessage.textContent = '✗ Error: ' + (data.error || 'Build or restart failed');
