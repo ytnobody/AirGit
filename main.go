@@ -3930,9 +3930,21 @@ func processReviewComments(issueNumber, prNumber int, comments []map[string]inte
 		exec.Command("git", "-C", repoPath, "worktree", "remove", "--force", worktreePath).Run()
 	}()
 
+	// Check if there are any differences from the remote branch
+	updateProgress("Checking differences from remote...")
+	diffCmd := exec.Command("git", "-C", worktreePath, "diff", "--name-only", fmt.Sprintf("origin/%s", branchName))
+	diffOutput, _ := diffCmd.Output()
+	changedFiles := strings.Split(strings.TrimSpace(string(diffOutput)), "\n")
+	hasLocalChanges := len(changedFiles) > 0 && changedFiles[0] != ""
+	
+	log.Printf("Local changes detected: %v, files: %v", hasLocalChanges, changedFiles)
+
 	// Process delete requests first
 	updateProgress("Processing file deletion requests...")
 	var filesToDelete []string
+	var deletedFiles []string
+	var alreadyDeletedFiles []string
+	
 	for _, comment := range comments {
 		body, bodyOk := comment["body"].(string)
 		path, pathOk := comment["path"].(string)
@@ -3951,13 +3963,37 @@ func processReviewComments(issueNumber, prNumber int, comments []map[string]inte
 	if len(filesToDelete) > 0 {
 		for _, filePath := range filesToDelete {
 			fullPath := filepath.Join(worktreePath, filePath)
-			log.Printf("Deleting file: %s", fullPath)
-			if err := os.Remove(fullPath); err != nil {
-				log.Printf("Failed to delete file %s: %v", filePath, err)
+			// Check if file exists first
+			if _, err := os.Stat(fullPath); err == nil {
+				log.Printf("Deleting file: %s", fullPath)
+				if err := os.Remove(fullPath); err != nil {
+					log.Printf("Failed to delete file %s: %v", filePath, err)
+				} else {
+					log.Printf("Successfully deleted file: %s", filePath)
+					deletedFiles = append(deletedFiles, filePath)
+				}
 			} else {
-				log.Printf("Successfully deleted file: %s", filePath)
+				log.Printf("File doesn't exist in current branch: %s", filePath)
+				alreadyDeletedFiles = append(alreadyDeletedFiles, filePath)
 			}
 		}
+	}
+	
+	// If all deletion requests are for already-deleted files and there are no other changes, skip
+	if len(filesToDelete) > 0 && len(deletedFiles) == 0 && !hasLocalChanges {
+		log.Printf("All requested deletions already complete, no other changes")
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "completed",
+			Message:     fmt.Sprintf("Requested files already deleted: %s", strings.Join(alreadyDeletedFiles, ", ")),
+			PRNumber:    prNumber,
+			PRURL:       fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber),
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
 	}
 
 	updateProgress("Analyzing review comments with Copilot...")
@@ -4014,12 +4050,109 @@ Make the necessary code modifications to address all the feedback.`, prNumber, r
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = env
 
+	// Create pipes to read stdout/stderr in real-time
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("Failed to create stdout pipe: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to setup Copilot command: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		log.Printf("Failed to create stderr pipe: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to setup Copilot command: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
 	var copilotOut bytes.Buffer
 	var copilotErr bytes.Buffer
-	cmd.Stdout = &copilotOut
-	cmd.Stderr = &copilotErr
 
-	if err := cmd.Run(); err != nil {
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		log.Printf("Failed to start Copilot command: %v", err)
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "failed",
+			Message:     fmt.Sprintf("Failed to start Copilot command: %v", err),
+			PRNumber:    prNumber,
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		return
+	}
+
+	// Read stdout in real-time and update progress
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdoutPipe.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				copilotOut.Write(buf[:n])
+				log.Printf("Copilot stdout: %s", chunk)
+
+				// Extract meaningful progress messages
+				lines := strings.Split(chunk, "\n")
+				for _, line := range lines {
+					if progressMsg, ok := extractMeaningfulProgress(line); ok {
+						updateProgress(fmt.Sprintf("🤖 %s", progressMsg))
+					}
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// Read stderr in real-time
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				copilotErr.Write(buf[:n])
+				log.Printf("Copilot stderr: %s", chunk)
+
+				// Some CLIs output progress to stderr
+				lines := strings.Split(chunk, "\n")
+				for _, line := range lines {
+					if progressMsg, ok := extractMeaningfulProgress(line); ok {
+						updateProgress(fmt.Sprintf("🤖 %s", progressMsg))
+					}
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	err = cmd.Wait()
+
+	if err != nil {
 		log.Printf("Copilot command failed: %v, stderr: %s", err, copilotErr.String())
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
@@ -4039,12 +4172,14 @@ Make the necessary code modifications to address all the feedback.`, prNumber, r
 	exec.Command("git", "-C", worktreePath, "add", "-A").Run()
 	commitMsg := fmt.Sprintf("Address review comments for PR #%d\n\nAuto-generated by AirGit agent", prNumber)
 	if err := exec.Command("git", "-C", worktreePath, "commit", "-m", commitMsg).Run(); err != nil {
+		log.Printf("No changes to commit after processing review comments")
 		agentStatusMutex.Lock()
 		agentStatus[issueNumber] = AgentStatus{
 			IssueNumber: issueNumber,
-			Status:      "failed",
-			Message:     "No changes to commit",
+			Status:      "completed",
+			Message:     "No changes needed - review requests already addressed",
 			PRNumber:    prNumber,
+			PRURL:       fmt.Sprintf("https://github.com/%s/%s/pull/%d", owner, repo, prNumber),
 			StartTime:   startTime,
 			EndTime:     time.Now(),
 		}
