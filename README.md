@@ -536,6 +536,58 @@ Response:
 }
 ```
 
+### GET /api/github/issues
+List all GitHub issues from the current repository.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Response:
+```json
+{
+  "owner": "username",
+  "repo": "repository-name",
+  "remoteUrl": "https://github.com/username/repository-name.git",
+  "issues": [
+    {
+      "number": 15,
+      "title": "issue作成機能を作る",
+      "body": "Create issue creation feature",
+      "author": "ytnobody",
+      "assignees": []
+    }
+  ]
+}
+```
+
+### POST /api/github/issues/create
+Create a new GitHub issue in the current repository.
+
+Query Parameters:
+- `repoPath` (optional): Relative path to the repository
+
+Request Body:
+```json
+{
+  "title": "New feature request",
+  "body": "Description of the feature",
+  "labels": ["feature", "enhancement"]
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "url": "https://github.com/owner/repo/issues/16",
+  "message": "Issue created successfully"
+}
+```
+
+Requirements:
+- GitHub repository with configured origin remote
+- `gh` CLI installed and authenticated
+
 ## Systemd Service Management
 
 AirGit includes endpoints for registering and managing the application as a systemd user service.
