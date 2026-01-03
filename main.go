@@ -2700,8 +2700,15 @@ func handleCreateGitHubIssue(w http.ResponseWriter, r *http.Request) {
 	issueURL := strings.TrimSpace(issueOutput.String())
 	log.Printf("Issue created: %s", issueURL)
 
+	// Extract issue number from URL (e.g., https://github.com/owner/repo/issues/123)
+	issueNumber := 0
+	if parts := strings.Split(issueURL, "/issues/"); len(parts) == 2 {
+		fmt.Sscanf(parts[1], "%d", &issueNumber)
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
+		"number":  issueNumber,
 		"url":     issueURL,
 		"message": "Issue created successfully",
 	})
