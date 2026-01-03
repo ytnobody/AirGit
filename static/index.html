@@ -1331,6 +1331,7 @@
                                 <div class="font-semibold text-sky-700"><a href="${prUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">#${pr.number} ${pr.title}</a></div>
                                 <div class="text-xs text-gray-500 mt-1">Author: ${author}</div>
                                 <div class="text-xs text-gray-500">Branch: ${pr.headRefName || 'unknown'}</div>
+                                <div class="review-progress-${pr.number} text-xs text-sky-600 mt-1 hidden italic"></div>
                             </div>
                             <button class="pr-review-btn bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded transition-colors whitespace-nowrap" data-pr-number="${pr.number}" data-pr-title="${pr.title.replace(/"/g, '&quot;')}">
                                 📝 Reviews
@@ -1475,6 +1476,14 @@
                     showNotification('✓ Agent started processing review comments');
                     prReviewsModal.classList.add('hidden');
                     
+                    // Show initial progress in PR list
+                    const reviewProgressEl = document.querySelector(`.review-progress-${currentPRNumber}`);
+                    if (reviewProgressEl) {
+                        reviewProgressEl.textContent = '⚙️ Starting review processing...';
+                        reviewProgressEl.classList.remove('hidden', 'text-red-600');
+                        reviewProgressEl.classList.add('text-sky-600');
+                    }
+                    
                     // Poll for status
                     const pollStatus = setInterval(async () => {
                         try {
@@ -1486,6 +1495,22 @@
                                 if (progressEl) {
                                     progressEl.textContent = status.message;
                                     progressEl.classList.remove('hidden');
+                                }
+                                
+                                const reviewProgressEl = document.querySelector(`.review-progress-${currentPRNumber}`);
+                                if (reviewProgressEl) {
+                                    reviewProgressEl.textContent = '📝 ' + status.message;
+                                    reviewProgressEl.classList.remove('hidden', 'text-red-600');
+                                    
+                                    if (status.status === 'completed') {
+                                        reviewProgressEl.classList.remove('text-sky-600');
+                                        reviewProgressEl.classList.add('text-green-600');
+                                    } else if (status.status === 'failed') {
+                                        reviewProgressEl.classList.remove('text-sky-600');
+                                        reviewProgressEl.classList.add('text-red-600');
+                                    } else {
+                                        reviewProgressEl.classList.add('text-sky-600');
+                                    }
                                 }
 
                                 if (status.status === 'completed') {
