@@ -599,6 +599,7 @@
         let allPRs = [];
         let currentPRNumber = null;
         let currentIssueForReview = null;
+        let currentPRComments = [];
 
         function getCurrentRepositoryPath() {
             const pathname = window.location.pathname;
@@ -1367,6 +1368,7 @@
                 console.log('Reviews data:', data);
 
                 if (response.ok) {
+                    currentPRComments = data.comments || [];
                     displayReviews(data);
                 } else {
                     prReviewsContent.innerHTML = `<div class="text-red-600 text-sm">${data.error || 'Failed to load reviews'}</div>`;
@@ -1429,15 +1431,7 @@
         prApplyReviewBtn.addEventListener('click', async () => {
             if (!currentPRNumber) return;
 
-            // Collect all review text
-            const reviews = prReviewsContent.querySelectorAll('[class*="bg-white"]');
-            let reviewText = '';
-            reviews.forEach(review => {
-                const text = review.textContent.trim();
-                if (text) reviewText += text + '\n\n';
-            });
-
-            if (!reviewText) {
+            if (!currentPRComments || currentPRComments.length === 0) {
                 showNotification('No review comments to apply');
                 return;
             }
@@ -1466,7 +1460,7 @@
                     body: JSON.stringify({
                         issue_number: issueNumber,
                         pr_number: currentPRNumber,
-                        review_text: reviewText
+                        comments: currentPRComments
                     })
                 });
 

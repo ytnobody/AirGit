@@ -3711,26 +3711,29 @@ func handleGetPRReviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("gh", "pr", "view", prNumberStr, "--json", "reviews,comments", "--repo", fmt.Sprintf("%s/%s", owner, repo))
+	// Get review comments with file paths using GitHub API
+	cmd := exec.Command("gh", "api", fmt.Sprintf("/repos/%s/%s/pulls/%s/comments", owner, repo, prNumberStr))
 	cmd.Dir = config.RepoPath
 	output, err := cmd.Output()
 	if err != nil {
-		log.Printf("gh pr view error: %v", err)
+		log.Printf("gh api error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get PR reviews"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get PR review comments"})
 		return
 	}
 
-	var prData map[string]interface{}
-	if err := json.Unmarshal(output, &prData); err != nil {
-		log.Printf("parse pr data error: %v", err)
+	var comments []map[string]interface{}
+	if err := json.Unmarshal(output, &comments); err != nil {
+		log.Printf("parse comments error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse PR data"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to parse PR comments"})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(prData)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"comments": comments,
+	})
 }
 
 func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
@@ -3743,9 +3746,9 @@ func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
-		IssueNumber int    `json:"issue_number"`
-		PRNumber    int    `json:"pr_number"`
-		ReviewText  string `json:"review_text"`
+		IssueNumber int                      `json:"issue_number"`
+		PRNumber    int                      `json:"pr_number"`
+		Comments    []map[string]interface{} `json:"comments"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -3766,13 +3769,13 @@ func handleAgentApplyReview(w http.ResponseWriter, r *http.Request) {
 	}
 	agentStatusMutex.Unlock()
 
-	go processReviewComments(payload.IssueNumber, payload.PRNumber, payload.ReviewText)
+	go processReviewComments(payload.IssueNumber, payload.PRNumber, payload.Comments)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Review processing started"})
 }
 
-func processReviewComments(issueNumber, prNumber int, reviewText string) {
+func processReviewComments(issueNumber, prNumber int, comments []map[string]interface{}) {
 	startTime := time.Now()
 	
 	updateProgress := func(message string) {
@@ -3928,7 +3931,50 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 		exec.Command("git", "-C", repoPath, "worktree", "remove", "--force", worktreePath).Run()
 	}()
 
+	// Process delete requests first
+	updateProgress("Processing file deletion requests...")
+	var filesToDelete []string
+	for _, comment := range comments {
+		body, bodyOk := comment["body"].(string)
+		path, pathOk := comment["path"].(string)
+		
+		if bodyOk && pathOk && path != "" {
+			// Check if comment requests file deletion
+			bodyLower := strings.ToLower(body)
+			if strings.Contains(bodyLower, "削除") || 
+			   (strings.Contains(bodyLower, "delete") && strings.Contains(bodyLower, "file")) ||
+			   (strings.Contains(bodyLower, "remove") && strings.Contains(bodyLower, "file")) {
+				filesToDelete = append(filesToDelete, path)
+			}
+		}
+	}
+	
+	if len(filesToDelete) > 0 {
+		for _, filePath := range filesToDelete {
+			fullPath := filepath.Join(worktreePath, filePath)
+			log.Printf("Deleting file: %s", fullPath)
+			if err := os.Remove(fullPath); err != nil {
+				log.Printf("Failed to delete file %s: %v", filePath, err)
+			} else {
+				log.Printf("Successfully deleted file: %s", filePath)
+			}
+		}
+	}
+
 	updateProgress("Analyzing review comments with Copilot...")
+
+	// Build review text for Copilot
+	var reviewTextBuilder strings.Builder
+	for _, comment := range comments {
+		if body, ok := comment["body"].(string); ok {
+			if path, ok := comment["path"].(string); ok && path != "" {
+				reviewTextBuilder.WriteString(fmt.Sprintf("File: %s\n", path))
+			}
+			reviewTextBuilder.WriteString(body)
+			reviewTextBuilder.WriteString("\n\n")
+		}
+	}
+	reviewText := reviewTextBuilder.String()
 
 	// Use copilot binary with same logic as processAgentIssue
 	homeDir, _ := os.UserHomeDir()
