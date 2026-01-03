@@ -3495,7 +3495,8 @@ func processReviewComments(issueNumber, prNumber int, reviewText string) {
 
 	owner, repo := parseGitHubURL(strings.TrimSpace(string(remoteURL)))
 	
-	cmd := exec.Command("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "headRefName,baseRefName")
+	var cmd *exec.Cmd
+	cmd = exec.Command("gh", "pr", "view", strconv.Itoa(prNumber), "--json", "headRefName,baseRefName")
 	cmd.Dir = config.RepoPath
 	output, err := cmd.Output()
 	if err != nil {
@@ -3617,7 +3618,6 @@ Make the necessary code modifications to address all the feedback.`, prNumber, r
 		}
 	}
 
-	var cmd *exec.Cmd
 	if copilotPath == "gh" {
 		cmd = exec.Command("gh", "copilot", "--allow-all-tools")
 	} else {
