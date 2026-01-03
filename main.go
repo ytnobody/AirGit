@@ -468,6 +468,57 @@ func handlePush(w http.ResponseWriter, r *http.Request) {
 		// Check if it's "everything up-to-date" which is not really an error
 		if strings.Contains(output, "up to date") || strings.Contains(output, "up-to-date") {
 			logs = append(logs, "✓ Everything is already up to date!")
+		} else if strings.Contains(output, "rejected") && strings.Contains(output, "non-fast-forward") {
+			// Remote has changes that we don't have - need to pull first
+			logs = append(logs, "⚠ Push rejected: remote has changes")
+			logs = append(logs, "Attempting to pull and merge...")
+			
+			// Try to pull with merge
+			pullOutput, pullErr := executeGitCommand("pull", remote, branch)
+			logs = append(logs, fmt.Sprintf("$ git pull %s %s", remote, branch))
+			if pullOutput != "" {
+				logs = append(logs, pullOutput)
+			}
+			
+			if pullErr != nil {
+				if strings.Contains(pullOutput, "CONFLICT") {
+					// Conflict detected during pull
+					conflictFiles := getConflictFiles()
+					resp := Response{
+						Error: fmt.Sprintf("Merge conflict detected in %d file(s)", len(conflictFiles)),
+						Log:   append(logs, "Please resolve conflicts manually"),
+					}
+					w.WriteHeader(http.StatusConflict)
+					json.NewEncoder(w).Encode(resp)
+					return
+				}
+				resp := Response{
+					Error: fmt.Sprintf("Pull failed: %v", pullErr),
+					Log:   logs,
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			
+			logs = append(logs, "✓ Pull successful, retrying push...")
+			
+			// Retry push after successful pull
+			retryOutput, retryErr := executeGitCommand("push", remote, branch)
+			logs = append(logs, fmt.Sprintf("$ git push %s %s", remote, branch))
+			if retryOutput != "" {
+				logs = append(logs, retryOutput)
+			}
+			if retryErr != nil {
+				resp := Response{
+					Error: fmt.Sprintf("Push failed after pull: %v", retryErr),
+					Log:   logs,
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			logs = append(logs, "✓ Push successful after pull!")
 		} else {
 			resp := Response{
 				Error: fmt.Sprintf("git push failed: %v", err),
@@ -552,16 +603,74 @@ func handlePull(w http.ResponseWriter, r *http.Request) {
 		logs = append(logs, output)
 	}
 	if err != nil {
-		resp := Response{
-			Error: fmt.Sprintf("git pull failed: %v", err),
-			Log:   logs,
+		// Check for merge conflicts
+		if strings.Contains(output, "CONFLICT") {
+			conflictFiles := getConflictFiles()
+			logs = append(logs, fmt.Sprintf("⚠ Merge conflict detected in %d file(s)", len(conflictFiles)))
+			logs = append(logs, "Attempting automatic conflict resolution...")
+			
+			// Try to resolve conflicts automatically
+			resolved, resolveErr := autoResolveConflicts(conflictFiles)
+			if resolveErr != nil {
+				logs = append(logs, fmt.Sprintf("✗ Automatic resolution failed: %v", resolveErr))
+				logs = append(logs, "Files with conflicts:")
+				for _, file := range conflictFiles {
+					logs = append(logs, fmt.Sprintf("  - %s", file))
+				}
+				resp := Response{
+					Error: "Merge conflict requires manual resolution",
+					Log:   logs,
+				}
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+			
+			if len(resolved) > 0 {
+				logs = append(logs, fmt.Sprintf("✓ Auto-resolved %d file(s):", len(resolved)))
+				for _, file := range resolved {
+					logs = append(logs, fmt.Sprintf("  - %s", file))
+				}
+				
+				// Commit the resolved changes
+				commitMsg := fmt.Sprintf("Merge %s/%s with auto-resolved conflicts", remote, branch)
+				commitOutput, commitErr := executeGitCommand("commit", "-m", commitMsg)
+				logs = append(logs, "$ git commit -m \""+commitMsg+"\"")
+				if commitOutput != "" {
+					logs = append(logs, commitOutput)
+				}
+				if commitErr != nil {
+					resp := Response{
+						Error: fmt.Sprintf("Failed to commit resolved conflicts: %v", commitErr),
+						Log:   logs,
+					}
+					w.WriteHeader(http.StatusInternalServerError)
+					json.NewEncoder(w).Encode(resp)
+					return
+				}
+				logs = append(logs, "✓ Pull successful with auto-resolved conflicts!")
+			} else {
+				logs = append(logs, "No conflicts could be auto-resolved")
+				resp := Response{
+					Error: "Merge conflict requires manual resolution",
+					Log:   logs,
+				}
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(resp)
+				return
+			}
+		} else {
+			resp := Response{
+				Error: fmt.Sprintf("git pull failed: %v", err),
+				Log:   logs,
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
-		return
+	} else {
+		logs = append(logs, "✓ Pull successful!")
 	}
-
-	logs = append(logs, "✓ Pull successful!")
 
 	json.NewEncoder(w).Encode(Response{
 		Branch: branch,
@@ -801,6 +910,116 @@ func getAheadBehind(branch string) (int, int) {
 	}
 
 	return 0, 0
+}
+
+// getConflictFiles returns a list of files with merge conflicts
+func getConflictFiles() []string {
+	output, err := executeGitCommand("diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return []string{}
+	}
+	
+	var files []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files
+}
+
+// autoResolveConflicts attempts to automatically resolve merge conflicts
+// Returns the list of successfully resolved files
+func autoResolveConflicts(conflictFiles []string) ([]string, error) {
+	var resolved []string
+	
+	for _, file := range conflictFiles {
+		filePath := filepath.Join(config.RepoPath, file)
+		
+		// Read the conflicted file
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+		
+		// Check if the conflict can be auto-resolved
+		// Simple strategy: if one side is empty or only whitespace, use the other side
+		lines := strings.Split(string(content), "\n")
+		var newContent strings.Builder
+		inConflict := false
+		oursContent := ""
+		theirsContent := ""
+		conflictStart := -1
+		
+		for i, line := range lines {
+			if strings.HasPrefix(line, "<<<<<<<") {
+				inConflict = true
+				conflictStart = i
+				oursContent = ""
+				theirsContent = ""
+			} else if strings.HasPrefix(line, "=======") && inConflict {
+				// Switch from ours to theirs
+			} else if strings.HasPrefix(line, ">>>>>>>") && inConflict {
+				inConflict = false
+				
+				// Try to resolve
+				oursEmpty := strings.TrimSpace(oursContent) == ""
+				theirsEmpty := strings.TrimSpace(theirsContent) == ""
+				
+				if oursEmpty && !theirsEmpty {
+					// Use theirs
+					newContent.WriteString(theirsContent)
+				} else if theirsEmpty && !oursEmpty {
+					// Use ours
+					newContent.WriteString(oursContent)
+				} else if oursContent == theirsContent {
+					// Both sides are the same
+					newContent.WriteString(oursContent)
+				} else {
+					// Cannot auto-resolve, restore conflict markers
+					newContent.WriteString("<<<<<<<\n")
+					newContent.WriteString(oursContent)
+					newContent.WriteString("=======\n")
+					newContent.WriteString(theirsContent)
+					newContent.WriteString(">>>>>>>\n")
+				}
+			} else if inConflict {
+				// Collect content
+				if oursContent != "" || !strings.HasPrefix(line, "=======") {
+					if strings.HasPrefix(strings.Join(lines[conflictStart:i], "\n"), "<<<<<<<") && !strings.Contains(strings.Join(lines[conflictStart:i], "\n"), "=======") {
+						oursContent += line + "\n"
+					} else {
+						theirsContent += line + "\n"
+					}
+				}
+			} else {
+				newContent.WriteString(line + "\n")
+			}
+		}
+		
+		// Check if all conflicts were resolved
+		finalContent := newContent.String()
+		if !strings.Contains(finalContent, "<<<<<<<") && !strings.Contains(finalContent, "=======") && !strings.Contains(finalContent, ">>>>>>>") {
+			// Write the resolved content
+			if err := os.WriteFile(filePath, []byte(finalContent), 0644); err != nil {
+				continue
+			}
+			
+			// Stage the resolved file
+			if _, err := executeGitCommand("add", file); err != nil {
+				continue
+			}
+			
+			resolved = append(resolved, file)
+		}
+	}
+	
+	if len(resolved) == 0 && len(conflictFiles) > 0 {
+		return resolved, fmt.Errorf("no conflicts could be automatically resolved")
+	}
+	
+	return resolved, nil
 }
 
 func listRepositories(basePath string) ([]Repository, error) {
