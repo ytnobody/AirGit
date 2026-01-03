@@ -3470,6 +3470,33 @@ Please implement this feature or fix.`, issueNumber, issueTitle, issueBody)
 		log.Printf("git add failed: %v", err)
 	}
 
+	// Check if there are any changes to commit
+	statusCmd := exec.Command("git", "status", "--porcelain")
+	statusCmd.Dir = worktreePath
+	statusOut, err := statusCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("git status check failed: %v", err)
+	}
+	
+	if len(strings.TrimSpace(string(statusOut))) == 0 {
+		log.Printf("No changes to commit in worktree")
+		agentStatusMutex.Lock()
+		agentStatus[issueNumber] = AgentStatus{
+			IssueNumber: issueNumber,
+			Status:      "completed",
+			Message:     "Agent completed but made no file changes. The issue may not require code modifications, or the changes were already present.",
+			StartTime:   startTime,
+			EndTime:     time.Now(),
+		}
+		agentStatusMutex.Unlock()
+		
+		// Clean up worktree
+		if err := removeWorktree(worktreePath); err != nil {
+			log.Printf("Failed to remove worktree: %v", err)
+		}
+		return
+	}
+
 	commitMsg := fmt.Sprintf("Issue #%d: %s\n\nAuto-generated implementation by AirGit agent", issueNumber, issueTitle)
 	if err := wtGitCmd("commit", "-m", commitMsg); err != nil {
 		log.Printf("git commit failed: %v", err)
